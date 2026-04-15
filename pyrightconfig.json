@@ -1,0 +1,28 @@
+{
+  "include": [
+    "packages/*/src",
+    "packages/*/tests"
+  ],
+  "exclude": [
+    "**/__pycache__",
+    "**/.venv",
+    "**/dist",
+    "**/build"
+  ],
+  "extraPaths": [
+    "packages/eager-tools-core/src",
+    "packages/eager-tools-anthropic/src",
+    "packages/eager-tools-openai/src"
+  ],
+  "pythonVersion": "3.11",
+  "typeCheckingMode": "strict",
+  "reportMissingImports": "warning",
+  "reportUnusedParameter": "none",
+  "reportUnknownParameterType": "warning",
+  "reportUnknownMemberType": "warning",
+  "reportMissingTypeStubs": "none",
+  "useLibraryCodeForTypes": true,
+  "strictListInference": true,
+  "strictDictionaryInference": true,
+  "strictSetInference": true
+}
