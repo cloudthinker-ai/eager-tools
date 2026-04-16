@@ -45,3 +45,4 @@ Thumbs.db
 # Build outputs
 bench/results/
 *.log
+uv.lock
