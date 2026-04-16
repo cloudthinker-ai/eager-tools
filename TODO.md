@@ -34,14 +34,14 @@ Decisions to lock BEFORE writing any code.
 
 ### `eager-tools-core` (~300–400 src LOC)
 
-- [ ] Sketch core API surface in Python — load-bearing — 1 day — `ROADMAP §8.2`
-- [ ] `types.py` — `ToolCall`, `SealEvent`, `Result` protocols — 60 LOC
-- [ ] `core.py::SealDetector` — chunk → seal event state machine — ~80 LOC
-- [ ] `executor.py::ExecutorPool` — async pool, cancellation scope, idempotency gate — ~120 LOC
+- [x] Sketch core API surface in Python — load-bearing — 1 day — `ROADMAP §8.2` — 2026-04-15
+- [x] `types.py` — `ToolCall`, `SealEvent`, `Result` protocols — 60 LOC — 2026-04-15
+- [x] `core.py::SealDetector` — chunk → seal event state machine — ~80 LOC — 2026-04-16
+- [x] `executor.py::ExecutorPool` — async pool, cancellation scope, idempotency gate — ~120 LOC — 2026-04-16
 - [ ] `observability.py` — opt-in OTel hooks, `seal_latency_ms` span — ~50 LOC
-- [ ] Tests: SealDetector chunk sequences → expected events — 200 LOC
-- [ ] Tests: ExecutorPool cancellation, error isolation, idempotency — 200 LOC
-- [ ] Adversarial test: retracted tools, mid-chunk JSON, empty arg blocks — `ROADMAP §2.4`
+- [x] Tests: SealDetector chunk sequences → expected events — 200 LOC — 2026-04-16
+- [x] Tests: ExecutorPool cancellation, error isolation, idempotency — 200 LOC — 2026-04-16
+- [x] Adversarial test: retracted tools, mid-chunk JSON, empty arg blocks — `ROADMAP §2.4` — 2026-04-16
 
 ### `eager-tools-anthropic` (~150–200 src LOC)
 
@@ -196,6 +196,7 @@ Build BEFORE launch, watch monthly. — `ROADMAP §7.2`
 
 > Move completed items here with date + brief outcome.
 
+- [x] 2026-04-16 — **Move 3 executed (core port)** — filled `SealDetector.observe/finalize/_seal` + `_ToolBuffer.materialize` in `core.py` (~75 LOC). Filled `ExecutorPool.dispatch/results/cancel_all/close/_run_one/_safe_hook` in `executor.py` (~80 LOC). Unskipped 7 golden-trace SealDetector tests; added 9 ExecutorPool tests (`test_executor_pool.py`, ~180 LOC) covering: dispatch, non-idempotent rejection, unknown tool, error isolation, cancellation, close sentinel, max_concurrent, in_flight tracking, observer exception safety. Added 4 adversarial tests (`test_adversarial.py`, ~80 LOC) covering: mid-chunk JSON accumulation, empty arg blocks, malformed JSON, 5-tool interleaved sequence. Fixed `test_partial_args_routed_via_index_when_id_absent` — reordered chunk sequence so late delta arrives before seal, matching realistic provider behavior. All 20 tests passing, lint + format clean. Zero `cloudthinker`/`app.*` imports in core.
 - [x] 2026-04-15 — **Adapter skeletons executed** — scaffolded `packages/eager-tools-anthropic/` + `packages/eager-tools-openai/` mirroring core's Move 2 pattern: pyproject (path-based `eager-tools-core` source), `{stream,chunks,__init__}.py` with signature-locked stubs + `NotImplementedError` bodies, 3 skipped replay tests per adapter (SimpleNamespace fakes, no SDK import), package README. Updated `pyrightconfig.json` extraPaths for both new src dirs, bumped `.github/workflows/ci.yml` lint-and-test matrix to include both. Uniform public shape across providers: `__init__(source, tools, *, observability, max_concurrent, conversation_id)` / `events()` / `results()` / `cancel()`.
 - [x] 2026-04-15 — Wrote `docs/rfc-streaming-tool-dispatch-protocol.md` — draft RFC proposing `tool_block_complete` SSE event as cross-provider standard; includes provider-landscape mapping (Anthropic/OpenAI/Gemini/Bedrock/Mistral/local), security considerations, reference state machine, migration notes
 - [x] 2026-04-15 — Wrote top-level `README.md` — launch-day hero with ASCII overlap diagram, benchmark headline table, 60-sec quickstart, layout, when-not-to-use, status table, CTAs

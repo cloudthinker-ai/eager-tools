@@ -12,7 +12,10 @@ See METHOD.md §3 for the underlying mechanism.
 
 from __future__ import annotations
 
+import json
+import time
 from dataclasses import dataclass, field
+from typing import Any
 
 from .types import SealEvent, ToolCall
 
@@ -27,8 +30,16 @@ class _ToolBuffer:
 
     def materialize(self, conversation_id: str | None) -> ToolCall:
         """Parse accumulated arg chunks into a final ToolCall."""
-        _ = conversation_id
-        raise NotImplementedError("Implementation deferred to Move 3 (port phase).")
+        if self.name is None:
+            raise ValueError(f"Tool call {self.tool_call_id} has no name")
+        raw = "".join(self.args_chunks).strip()
+        arguments: dict[str, Any] = json.loads(raw) if raw else {}
+        return ToolCall(
+            tool_call_id=self.tool_call_id,
+            name=self.name,
+            arguments=arguments,
+            conversation_id=conversation_id,
+        )
 
 
 class SealDetector:
@@ -58,6 +69,8 @@ class SealDetector:
         self._last_tool_call_id: str | None = None
         self._buffers: dict[str, _ToolBuffer] = {}
         self._index_to_id: dict[int, str] = {}
+        # perf_counter() timestamp when first chunk arrived for each buffer
+        self._buffer_start_ts: dict[str, float] = {}
 
     def observe(
         self,
@@ -73,21 +86,74 @@ class SealDetector:
         carry only `index` — the detector routes them back to the correct buffer
         via the index→id map built on the first chunk.
         """
-        _ = (tool_call_id, index, name, args_delta)
-        raise NotImplementedError("Implementation deferred to Move 3 (port phase).")
+        if tool_call_id is not None:
+            if tool_call_id == self._last_tool_call_id:
+                buf = self._buffers[tool_call_id]
+                if name is not None:
+                    buf.name = name
+                if args_delta:
+                    buf.args_chunks.append(args_delta)
+                if index is not None:
+                    self._index_to_id[index] = tool_call_id
+                return None
+
+            sealed_event: SealEvent | None = None
+            if self._last_tool_call_id is not None:
+                sealed_event = self._seal(self._last_tool_call_id)
+
+            self._buffers[tool_call_id] = _ToolBuffer(tool_call_id, name)
+            self._buffer_start_ts[tool_call_id] = time.perf_counter()
+            if index is not None:
+                self._index_to_id[index] = tool_call_id
+            if args_delta:
+                self._buffers[tool_call_id].args_chunks.append(args_delta)
+            self._last_tool_call_id = tool_call_id
+            return sealed_event
+
+        if index is not None and index in self._index_to_id:
+            target_id = self._index_to_id[index]
+        elif self._last_tool_call_id is not None:
+            target_id = self._last_tool_call_id
+        else:
+            return None
+
+        buf = self._buffers.get(target_id)
+        if buf is None:
+            return None
+        if name is not None:
+            buf.name = name
+        if args_delta:
+            buf.args_chunks.append(args_delta)
+        return None
+
+    def _seal(self, tool_call_id: str) -> SealEvent:
+        buf = self._buffers.pop(tool_call_id)
+        start_ts = self._buffer_start_ts.pop(tool_call_id, None)
+        latency_ms = (time.perf_counter() - start_ts) * 1000.0 if start_ts is not None else 0.0
+        tool_call = buf.materialize(self._conversation_id)
+        return SealEvent(
+            kind="tool_sealed",
+            tool_call=tool_call,
+            seal_latency_ms=latency_ms,
+        )
 
     def finalize(self) -> SealEvent | None:
         """Called on message_stop. Seals the final in-flight tool, if any.
 
         Returns None if there was no in-flight tool (tool-less message).
         """
-        raise NotImplementedError("Implementation deferred to Move 3 (port phase).")
+        if self._last_tool_call_id is None:
+            return None
+        event = self._seal(self._last_tool_call_id)
+        self._last_tool_call_id = None
+        return event
 
     def reset(self) -> None:
         """Reset detector state between conversations. Cheaper than re-instantiating."""
         self._last_tool_call_id = None
         self._buffers.clear()
         self._index_to_id.clear()
+        self._buffer_start_ts.clear()
 
     @property
     def in_flight_tool_call_id(self) -> str | None:
