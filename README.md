@@ -33,6 +33,10 @@ Parallel tool calling overlaps tools with tools. **Eager tool calling overlaps t
 
 Synthetic harness — `make bench` reproduces locally, deterministic.
 Across 16 workloads (3 → 15 tools), eager beats parallel by **1.20× – 1.50×** (median ~1.28×).
+Parallel is the right baseline: modern frameworks (`langchain.agents.create_agent`,
+OpenAI Agents SDK, Vercel AI SDK) already execute tool calls from one
+assistant message concurrently. Eager's win comes from overlapping tools
+with the *stream itself* — something parallel dispatch can't do.
 Full table + repro details: [`bench/results.md`](./bench/results.md).
 
 | Workload | Sequential | Parallel | **Eager** | Speedup vs parallel |
