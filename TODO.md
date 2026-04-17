@@ -25,11 +25,11 @@ Decisions to lock BEFORE writing any code.
 
 ### Repo scaffolding
 
-- [ ] `git init`, monorepo layout per `ROADMAP §2.1` — 2 hr
-- [ ] `pyproject.toml` with uv, py3.11+, optional anthropic/openai deps — 1 hr
-- [ ] `LICENSE`, `.gitignore`, `.python-version`
-- [ ] `.github/workflows/ci.yml` — ruff + pytest + bench smoke — 2 hr
-- [ ] `.github/ISSUE_TEMPLATE/config.yml` — disable issues, point to Discussions — 30 min
+- [x] `git init`, monorepo layout per `ROADMAP §2.1` — 2026-04-15
+- [x] `pyproject.toml` with uv, py3.11+, optional anthropic/openai deps — 2026-04-15
+- [x] `LICENSE`, `.gitignore`, `.python-version` — 2026-04-15
+- [x] `.github/workflows/ci.yml` — ruff + pytest + bench smoke — 2026-04-15
+- [x] `.github/ISSUE_TEMPLATE/config.yml` — disable issues, point to Discussions — 2026-04-15
 - [ ] Pre-commit hooks (ruff, pyrefly) — 1 hr
 
 ### `eager-tools-core` (~300–400 src LOC)
@@ -46,34 +46,35 @@ Decisions to lock BEFORE writing any code.
 ### `eager-tools-anthropic` (~150–200 src LOC)
 
 - [x] Scaffold `packages/eager-tools-anthropic/` — pyproject (path-based core dep), `stream.py` (AnthropicEagerStream stub), `chunks.py` (normalize_event stub), 3 skipped replay tests, README — 2026-04-15
-- [ ] Port chunk-routing logic from CloudThinker `stream_handler.py:145-153` and `:635-659`
-- [ ] Wrap `anthropic.AsyncStream` → emit `SealEvent`s — ~120 LOC
-- [ ] `examples/02_anthropic_live.py` — 3 fake slow tools, prints overlap timeline
-- [ ] Tests: replay recorded SSE traces, verify seal timing — 250 LOC
+- [x] Port chunk-routing logic from CloudThinker `stream_handler.py:145-153` and `:635-659` — 2026-04-16
+- [x] Wrap `anthropic.AsyncStream` → emit `SealEvent`s — 2026-04-16
+- [x] `examples/02_anthropic_live.py` — 3 fake slow tools, prints overlap timeline — 2026-04-16
+- [x] Tests: replay recorded SSE traces, verify seal timing — 2026-04-16
 
 ### `eager-tools-openai` (~180–230 src LOC)
 
 - [x] Scaffold `packages/eager-tools-openai/` — pyproject (path-based core dep), `stream.py` (OpenAIEagerStream stub), `chunks.py` (normalize_chunk stub), 3 skipped replay tests, README — 2026-04-15
-- [ ] Wrap OpenAI `chat.completions.stream(...)` — handle `tool_calls` array deltas
-- [ ] Handle both function-calling + new tool-calling API surfaces — ~150 LOC
-- [ ] `examples/03_openai_live.py` — same harness as Anthropic
-- [ ] Tests: 250 LOC
+- [x] Wrap OpenAI `chat.completions.stream(...)` — handle `tool_calls` array deltas — 2026-04-16
+- [x] Handle both function-calling + new tool-calling API surfaces — 2026-04-16
+- [x] `examples/03_openai_live.py` — same harness as Anthropic — 2026-04-16
+- [x] Tests: replay traces — 2026-04-16
+- [x] Bonus: `examples/05_openrouter_live.py` — same adapter, OpenAI-compatible base_url swap — 2026-04-17
 
 ### Examples + Bench
 
-- [ ] `examples/01_minimal.py` — 30 lines, show seal in action — 1 hr
-- [ ] `examples/04_cancellation.py` — user-interrupt mid-stream — 2 hr
-- [ ] `bench/harness.py` — fake-tool generator with configurable latency — 100 LOC
-- [ ] `bench/run.py` — sequential vs parallel vs eager, prints table — 100 LOC
-- [ ] `bench/results.md` — checked-in numbers + repro command — 1 hr
+- [x] `examples/01_minimal.py` — 30 lines, show seal in action — 2026-04-16
+- [x] `examples/04_cancellation.py` — user-interrupt mid-stream — 2026-04-16
+- [x] `bench/harness.py` — fake-tool generator with configurable latency — 2026-04-17
+- [x] `bench/run.py` — sequential vs parallel vs eager, prints table — 2026-04-17
+- [x] `bench/results.md` — checked-in numbers + repro command — 2026-04-17
 - [ ] Adversarial review of bench fairness — invite external reviewer — `ROADMAP §2.4`
 
 ### Docs
 
-- [ ] `README.md` hero section + 60-second quickstart + benchmark headline — 4 hr
+- [x] `README.md` hero section + 60-second quickstart + benchmark headline — 2026-04-17 (rewritten with measured synthetic numbers, fixed broken import path)
 - [ ] Embed hero gif (split-screen classic vs eager) — 2 hr
-- [ ] `docs/concept.md` — port from `cloud-cost-optimization/tasks/eager-tool-calling-explainer.md` — 1 hr
-- [ ] `docs/when-not-to-use.md` — 1 hr
+- [x] `docs/concept.md` — port from `cloud-cost-optimization/tasks/eager-tool-calling-explainer.md` — 2026-04-16
+- [x] `docs/when-not-to-use.md` — 2026-04-16
 - [ ] `docs/diagrams/*.svg` — whiteboard timeline diagrams (already drafted in landing-page blog) — 2 hr
 
 ---
@@ -196,6 +197,8 @@ Build BEFORE launch, watch monthly. — `ROADMAP §7.2`
 
 > Move completed items here with date + brief outcome.
 
+- [x] 2026-04-17 — **Phase 1 polish batch** — landed `bench/` (synthetic harness with 3 workloads, three dispatch modes, p50 reporting, optional `--live` spot-check), `Makefile` targets `bench` / `bench-live-anthropic` / `bench-live-openai`, generated `bench/results.md` (1.0–1.2× over parallel, honestly conservative because synthetic removes network jitter). Rewrote `README.md` hero: measured numbers replace the unsourced 21× boast, broken `from eager_tools.adapters.anthropic import eager_stream` quickstart fixed to use `AnthropicEagerStream`, project layout updated (Makefile, docs/, bench/), Status table bumped from "soon" to "alpha". TODO.md cleanup of Phase 1 items that were already shipped (2026-04-15/16) but still showed `[ ]`.
+- [x] 2026-04-17 — **OpenRouter support** — added `examples/05_openrouter_live.py` reusing the existing `OpenAIEagerStream` adapter (OpenRouter is OpenAI-wire-compatible — only `base_url` + key change), `Makefile example-5` target wired to `.env` autoload via `ENV_LOAD` macro. Verified end-to-end against live OpenRouter; ~5.2s eager vs ~8.2s classic on `openai/gpt-4o-mini`.
 - [x] 2026-04-16 — **Move 3 executed (core port)** — filled `SealDetector.observe/finalize/_seal` + `_ToolBuffer.materialize` in `core.py` (~75 LOC). Filled `ExecutorPool.dispatch/results/cancel_all/close/_run_one/_safe_hook` in `executor.py` (~80 LOC). Unskipped 7 golden-trace SealDetector tests; added 9 ExecutorPool tests (`test_executor_pool.py`, ~180 LOC) covering: dispatch, non-idempotent rejection, unknown tool, error isolation, cancellation, close sentinel, max_concurrent, in_flight tracking, observer exception safety. Added 4 adversarial tests (`test_adversarial.py`, ~80 LOC) covering: mid-chunk JSON accumulation, empty arg blocks, malformed JSON, 5-tool interleaved sequence. Fixed `test_partial_args_routed_via_index_when_id_absent` — reordered chunk sequence so late delta arrives before seal, matching realistic provider behavior. All 20 tests passing, lint + format clean. Zero `cloudthinker`/`app.*` imports in core.
 - [x] 2026-04-15 — **Adapter skeletons executed** — scaffolded `packages/eager-tools-anthropic/` + `packages/eager-tools-openai/` mirroring core's Move 2 pattern: pyproject (path-based `eager-tools-core` source), `{stream,chunks,__init__}.py` with signature-locked stubs + `NotImplementedError` bodies, 3 skipped replay tests per adapter (SimpleNamespace fakes, no SDK import), package README. Updated `pyrightconfig.json` extraPaths for both new src dirs, bumped `.github/workflows/ci.yml` lint-and-test matrix to include both. Uniform public shape across providers: `__init__(source, tools, *, observability, max_concurrent, conversation_id)` / `events()` / `results()` / `cancel()`.
 - [x] 2026-04-15 — Wrote `docs/rfc-streaming-tool-dispatch-protocol.md` — draft RFC proposing `tool_block_complete` SSE event as cross-provider standard; includes provider-landscape mapping (Anthropic/OpenAI/Gemini/Bedrock/Mistral/local), security considerations, reference state machine, migration notes
