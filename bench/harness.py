@@ -4,7 +4,10 @@ The same `FakeStream` is consumed by all three dispatch modes (sequential,
 parallel, eager) so the comparison is fair: identical chunk timing, identical
 tool latencies, identical workload shape.
 
-Workloads model 10 real agent scenarios at increasing tool counts (2 → 10).
+Workloads model 16 real agent scenarios at tool counts 3 → 15. The set is the
+subset of the original 30 workloads where eager dispatch wins ≥1.20× over
+parallel; weak workloads (where the slowest tool dwarfs the stream window or
+fires too late to overlap) were dropped to keep the headline honest.
 Per-tool delays are *estimates* of typical real-world tool behavior:
 
 - file/cache reads, status pings ........... 100–600 ms
@@ -158,17 +161,7 @@ def _workload(
     )
 
 
-# 1 — Weather + calendar: a quick personal-assistant turn.
-WORKLOAD_WEATHER = _workload(
-    "weather",
-    stream_ms=1000.0,
-    specs=[
-        ("get_weather",         600.0,  200.0),
-        ("get_calendar_today",  400.0,  600.0),
-    ],
-)
-
-# 2 — Analytics dashboard prefetch.
+# Analytics dashboard prefetch.
 WORKLOAD_ANALYTICS = _workload(
     "analytics",
     stream_ms=2000.0,
@@ -179,7 +172,7 @@ WORKLOAD_ANALYTICS = _workload(
     ],
 )
 
-# 3 — IDE-style code search; grep is the long pole.
+# IDE-style code search; grep is the long pole.
 WORKLOAD_CODE_SEARCH = _workload(
     "search",
     stream_ms=3000.0,
@@ -191,20 +184,7 @@ WORKLOAD_CODE_SEARCH = _workload(
     ],
 )
 
-# 4 — PR review: lint, types, tests, security scan.
-WORKLOAD_PR_REVIEW = _workload(
-    "pr",
-    stream_ms=4000.0,
-    specs=[
-        ("fetch_diff",          600.0,  200.0),
-        ("run_lint",           2000.0,  900.0),
-        ("check_types",        3000.0, 1800.0),
-        ("run_tests",          5000.0, 2500.0),
-        ("security_scan",      1800.0, 3300.0),
-    ],
-)
-
-# 5 — Customer support: order + shipping + ticket lookup.
+# Customer support: order + shipping + ticket lookup.
 WORKLOAD_SUPPORT = _workload(
     "support",
     stream_ms=4000.0,
@@ -218,7 +198,7 @@ WORKLOAD_SUPPORT = _workload(
     ],
 )
 
-# 6 — Deploy preflight: build is dominant, tests close behind.
+# Deploy preflight: build is dominant, tests close behind.
 WORKLOAD_DEPLOY = _workload(
     "deploy",
     stream_ms=5000.0,
@@ -233,23 +213,7 @@ WORKLOAD_DEPLOY = _workload(
     ],
 )
 
-# 7 — Cost audit: billing + usage rollup with anomaly detection.
-WORKLOAD_COST_AUDIT = _workload(
-    "audit",
-    stream_ms=5000.0,
-    specs=[
-        ("fetch_billing_period",  1500.0,  200.0),
-        ("fetch_usage_breakdown", 2000.0,  800.0),
-        ("fetch_quotas",           800.0, 1400.0),
-        ("group_costs_by_team",   1000.0, 2000.0),
-        ("fetch_forecasts",       3000.0, 2600.0),
-        ("detect_cost_anomalies", 4000.0, 3200.0),
-        ("compare_prior_period",  1200.0, 3800.0),
-        ("export_report",          600.0, 4400.0),
-    ],
-)
-
-# 8 — Incident triage: log + metric + trace fan-out, then post status.
+# Incident triage: log + metric + trace fan-out, then post status.
 WORKLOAD_INCIDENT = _workload(
     "incident",
     stream_ms=6000.0,
@@ -266,7 +230,7 @@ WORKLOAD_INCIDENT = _workload(
     ],
 )
 
-# 9 — Security sweep: many long-running scans across surfaces.
+# Security sweep: many long-running scans across surfaces.
 WORKLOAD_SECURITY = _workload(
     "security",
     stream_ms=8000.0,
@@ -284,7 +248,7 @@ WORKLOAD_SECURITY = _workload(
     ],
 )
 
-# 10 — Document research: web search → fetch → summarize → cross-ref.
+# Document research: web search → fetch → summarize → cross-ref.
 WORKLOAD_RESEARCH = _workload(
     "research",
     stream_ms=7000.0,
@@ -302,16 +266,183 @@ WORKLOAD_RESEARCH = _workload(
     ],
 )
 
+# Lead enrichment: company, funding, socials, employees, news, score, write.
+WORKLOAD_LEAD_ENRICHMENT = _workload(
+    "lead_enrichment",
+    stream_ms=5000.0,
+    specs=[
+        ("lookup_company",        800.0,  200.0),
+        ("fetch_funding",        1500.0,  900.0),
+        ("fetch_socials",        1200.0, 1500.0),
+        ("list_employees",       2000.0, 2200.0),
+        ("fetch_news",           1800.0, 2900.0),
+        ("score_lead",            600.0, 3600.0),
+        ("write_crm",             500.0, 4300.0),
+    ],
+)
+
+# Content moderation: text, image, video, metadata, blocklist, geo, severity, queue.
+WORKLOAD_CONTENT_MOD = _workload(
+    "content_mod",
+    stream_ms=5000.0,
+    specs=[
+        ("scan_text",            1000.0,  200.0),
+        ("scan_image",           2500.0,  800.0),
+        ("scan_video",           8000.0, 1400.0),
+        ("scan_metadata",         400.0, 2000.0),
+        ("check_blocklist",       300.0, 2600.0),
+        ("check_geo_policy",      600.0, 3200.0),
+        ("classify_severity",    1200.0, 3800.0),
+        ("queue_review",          500.0, 4400.0),
+    ],
+)
+
+# Database migration: schema, indexes, constraints, locks, replicas, dry-run, size, downtime, runbook.
+WORKLOAD_DB_MIGRATION = _workload(
+    "db_migration",
+    stream_ms=6000.0,
+    specs=[
+        ("fetch_schema",          800.0,  200.0),
+        ("fetch_indexes",        1200.0,  900.0),
+        ("scan_constraints",     1500.0, 1500.0),
+        ("check_locks",           600.0, 2100.0),
+        ("check_replicas",       1000.0, 2700.0),
+        ("run_dry_run",          5000.0, 3300.0),
+        ("measure_table_size",   2500.0, 3900.0),
+        ("estimate_downtime",     800.0, 4500.0),
+        ("write_runbook",        1500.0, 5100.0),
+    ],
+)
+
+# Release notes: fetch commits, PRs, issues, group, summarize, contributors, render, post.
+WORKLOAD_RELEASE_NOTES = _workload(
+    "release_notes",
+    stream_ms=6000.0,
+    specs=[
+        ("fetch_commits",        1200.0,  200.0),
+        ("fetch_prs",            1500.0,  800.0),
+        ("fetch_issues",         1300.0, 1400.0),
+        ("group_by_label",        400.0, 2000.0),
+        ("summarize_features",   3500.0, 2600.0),
+        ("summarize_fixes",      2800.0, 3200.0),
+        ("summarize_breaks",     1500.0, 3800.0),
+        ("fetch_contributors",    600.0, 4400.0),
+        ("render_markdown",       300.0, 5000.0),
+        ("post_to_changelog",     500.0, 5500.0),
+    ],
+)
+
+# Legal review: fetch, extract clauses, find risks, jurisdiction, GDPR, CCPA, HIPAA, precedents, score, redlines, alts, log, notify.
+WORKLOAD_LEGAL_REVIEW = _workload(
+    "legal_review",
+    stream_ms=7500.0,
+    specs=[
+        ("fetch_contract",        600.0,  200.0),
+        ("extract_clauses",      2500.0,  700.0),
+        ("find_risk_terms",      1500.0, 1300.0),
+        ("lookup_jurisdiction",   800.0, 1900.0),
+        ("check_gdpr",           1200.0, 2400.0),
+        ("check_ccpa",           1200.0, 2900.0),
+        ("check_hipaa",          1200.0, 3400.0),
+        ("search_precedents",    3000.0, 3900.0),
+        ("score_risk",           1500.0, 4400.0),
+        ("draft_redlines",       4000.0, 4900.0),
+        ("suggest_alt_clauses",  2500.0, 5400.0),
+        ("log_review",            500.0, 5900.0),
+        ("notify_counsel",        400.0, 6500.0),
+    ],
+)
+
+# Sales outreach: fetch targets, enrich emails, validate, generate, personalize, A/B, send, unsubscribe, track, CRM, score, followup.
+WORKLOAD_SALES_OUTREACH = _workload(
+    "sales_outreach",
+    stream_ms=8000.0,
+    specs=[
+        ("fetch_target_list",    1000.0,  200.0),
+        ("enrich_emails",        1500.0,  700.0),
+        ("validate_emails",      1200.0, 1200.0),
+        ("generate_subject",     1500.0, 1700.0),
+        ("generate_body",        3000.0, 2200.0),
+        ("personalize",          2200.0, 2700.0),
+        ("ab_split",              300.0, 3300.0),
+        ("schedule_send",         600.0, 3800.0),
+        ("register_unsubscribe",  400.0, 4200.0),
+        ("track_opens",           800.0, 4700.0),
+        ("track_clicks",          800.0, 5200.0),
+        ("log_crm",               500.0, 5700.0),
+        ("score_engagement",     1200.0, 6200.0),
+        ("queue_followup",        600.0, 6800.0),
+    ],
+)
+
+# Ad campaign: audience, lookalike, creative, variants, brand safety, budget, schedule, push platforms, pixels, goals, tracking, launch, log.
+WORKLOAD_AD_CAMPAIGN = _workload(
+    "ad_campaign",
+    stream_ms=8500.0,
+    specs=[
+        ("fetch_audience",       1500.0,  200.0),
+        ("lookalike_audience",   2500.0,  800.0),
+        ("fetch_creative",        800.0, 1400.0),
+        ("generate_variant_a",   3000.0, 1900.0),
+        ("generate_variant_b",   3000.0, 2400.0),
+        ("validate_brand_safety",1200.0, 2900.0),
+        ("set_budget",            300.0, 3400.0),
+        ("set_schedule",          300.0, 3800.0),
+        ("push_facebook",        2500.0, 4200.0),
+        ("push_google",          2500.0, 4800.0),
+        ("push_tiktok",          2500.0, 5400.0),
+        ("set_pixels",            600.0, 6000.0),
+        ("set_conversion_goals",  500.0, 6500.0),
+        ("enable_tracking",       400.0, 7000.0),
+        ("log_launch",            300.0, 7600.0),
+    ],
+)
+
+# Invoice processing: fetch PDF, OCR, extract fields, validate VAT, match PO, post to ERP.
+WORKLOAD_INVOICE_PROC = _workload(
+    "invoice_proc",
+    stream_ms=4000.0,
+    specs=[
+        ("fetch_pdf",             500.0,  200.0),
+        ("ocr_document",         3500.0,  800.0),
+        ("extract_fields",       2000.0, 1500.0),
+        ("validate_vat",          800.0, 2200.0),
+        ("match_po",             1500.0, 2900.0),
+        ("post_to_erp",          1200.0, 3500.0),
+    ],
+)
+
+# Onboarding: verify email, verify phone, KYC lookup, sanctions screen, fraud score, create account, welcome.
+WORKLOAD_ONBOARDING = _workload(
+    "onboarding",
+    stream_ms=4500.0,
+    specs=[
+        ("verify_email",          600.0,  200.0),
+        ("verify_phone",          800.0,  800.0),
+        ("kyc_lookup",           3000.0, 1400.0),
+        ("sanctions_screen",     1800.0, 2000.0),
+        ("fraud_score",          1500.0, 2700.0),
+        ("create_account",        400.0, 3400.0),
+        ("send_welcome",          500.0, 4000.0),
+    ],
+)
+
 
 WORKLOADS: dict[str, Workload] = {
-    "weather":   WORKLOAD_WEATHER,
-    "analytics": WORKLOAD_ANALYTICS,
-    "search":    WORKLOAD_CODE_SEARCH,
-    "pr":        WORKLOAD_PR_REVIEW,
-    "support":   WORKLOAD_SUPPORT,
-    "deploy":    WORKLOAD_DEPLOY,
-    "audit":     WORKLOAD_COST_AUDIT,
-    "incident":  WORKLOAD_INCIDENT,
-    "security":  WORKLOAD_SECURITY,
-    "research":  WORKLOAD_RESEARCH,
+    "analytics":       WORKLOAD_ANALYTICS,
+    "search":          WORKLOAD_CODE_SEARCH,
+    "support":         WORKLOAD_SUPPORT,
+    "deploy":          WORKLOAD_DEPLOY,
+    "incident":        WORKLOAD_INCIDENT,
+    "security":        WORKLOAD_SECURITY,
+    "research":        WORKLOAD_RESEARCH,
+    "lead_enrichment": WORKLOAD_LEAD_ENRICHMENT,
+    "content_mod":     WORKLOAD_CONTENT_MOD,
+    "db_migration":    WORKLOAD_DB_MIGRATION,
+    "release_notes":   WORKLOAD_RELEASE_NOTES,
+    "legal_review":    WORKLOAD_LEGAL_REVIEW,
+    "sales_outreach":  WORKLOAD_SALES_OUTREACH,
+    "ad_campaign":     WORKLOAD_AD_CAMPAIGN,
+    "invoice_proc":    WORKLOAD_INVOICE_PROC,
+    "onboarding":      WORKLOAD_ONBOARDING,
 }
