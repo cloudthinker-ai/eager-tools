@@ -39,8 +39,31 @@ def normalize_event(event: Any) -> NormalizedChunk | None:
     content_block_stop (the stop event itself is redundant — the SealDetector
     detects seals via the next tool's first chunk).
     """
-    _ = event
-    raise NotImplementedError("Implementation deferred to Move 3 (port phase).")
+    event_type = getattr(event, "type", None)
+
+    if event_type == "content_block_start":
+        block = getattr(event, "content_block", None)
+        if getattr(block, "type", None) != "tool_use":
+            return None
+        return NormalizedChunk(
+            tool_call_id=getattr(block, "id", None),
+            index=getattr(event, "index", None),
+            name=getattr(block, "name", None),
+            args_delta="",
+        )
+
+    if event_type == "content_block_delta":
+        delta = getattr(event, "delta", None)
+        if getattr(delta, "type", None) != "input_json_delta":
+            return None
+        return NormalizedChunk(
+            tool_call_id=None,
+            index=getattr(event, "index", None),
+            name=None,
+            args_delta=getattr(delta, "partial_json", "") or "",
+        )
+
+    return None
 
 
 __all__ = ["NormalizedChunk", "normalize_event"]

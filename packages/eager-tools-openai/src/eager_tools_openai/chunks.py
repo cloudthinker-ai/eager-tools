@@ -43,8 +43,25 @@ def normalize_chunk(chunk: Any) -> list[NormalizedChunk]:
     (different indices), so this returns a list. Empty list for chunks with
     no `delta.tool_calls` (text deltas, role deltas, finish-only chunks).
     """
-    _ = chunk
-    raise NotImplementedError("Implementation deferred to Move 3 (port phase).")
+    out: list[NormalizedChunk] = []
+    choices: list[Any] = getattr(chunk, "choices", None) or []
+    if not choices:
+        return out
+    delta = getattr(choices[0], "delta", None)
+    tool_calls: list[Any] = getattr(delta, "tool_calls", None) or []
+    for tc in tool_calls:
+        fn = getattr(tc, "function", None)
+        args: str = (getattr(fn, "arguments", "") or "") if fn is not None else ""
+        name: str | None = getattr(fn, "name", None) if fn is not None else None
+        out.append(
+            NormalizedChunk(
+                tool_call_id=getattr(tc, "id", None),
+                index=getattr(tc, "index", None),
+                name=name,
+                args_delta=args,
+            )
+        )
+    return out
 
 
 __all__ = ["NormalizedChunk", "normalize_chunk"]

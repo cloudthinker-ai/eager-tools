@@ -1,47 +1,50 @@
 """OpenAIEagerStream replay tests.
 
-All skipped — bodies land during Move 3. Test names + docstrings document
-target behavior. Tests feed synthetic chunks (SimpleNamespace, no SDK import)
-to keep CI fast, deterministic, and offline.
-
-Source of truth: METHOD.md §3 + the core SealDetector contract.
+Tests feed synthetic chunks (SimpleNamespace, no SDK import) to keep CI fast,
+deterministic, and offline. Source of truth: METHOD.md §3 + the core
+SealDetector contract.
 """
 
 from __future__ import annotations
 
-from types import SimpleNamespace
+import asyncio
+import contextlib
+from collections.abc import AsyncIterator
+from typing import Any
 
-import pytest
+from eager_tools import Tool, ToolCall
+from fixtures import (
+    chunk_with_tool_calls,
+    finish,
+    text_chunk,
+    tool_call_args,
+    tool_call_first,
+)
 
-from eager_tools import Tool
 from eager_tools_openai import OpenAIEagerStream
 from eager_tools_openai.chunks import normalize_chunk
 
-pytestmark = pytest.mark.skip(reason="Implementation deferred to Move 3 (port phase).")
+
+class FakeTool:
+    def __init__(self, name: str, *, idempotent: bool = True, delay: float = 0.0) -> None:
+        self.name = name
+        self.idempotent = idempotent
+        self._delay = delay
+
+    async def __call__(self, arguments: dict[str, Any]) -> Any:
+        if self._delay:
+            await asyncio.sleep(self._delay)
+        return {"name": self.name, "args": arguments}
 
 
-def _chunk(tool_calls: list[SimpleNamespace], finish_reason: str | None = None) -> SimpleNamespace:
-    """Build a minimal OpenAI-shape chunk with the given tool_call deltas."""
-    return SimpleNamespace(
-        choices=[
-            SimpleNamespace(
-                index=0,
-                delta=SimpleNamespace(tool_calls=tool_calls),
-                finish_reason=finish_reason,
-            )
-        ]
-    )
+async def _async_iter(items: list[Any]) -> AsyncIterator[Any]:
+    for it in items:
+        yield it
 
 
 def test_tool_calls_delta_first_emits_id_name() -> None:
     """First delta for a tool_call slot carries `id` + `function.name`."""
-    chunk = _chunk([
-        SimpleNamespace(
-            index=0,
-            id="call_A",
-            function=SimpleNamespace(name="read_file", arguments=""),
-        )
-    ])
+    chunk = chunk_with_tool_calls([tool_call_first(0, "call_A", "read_file")])
     out = normalize_chunk(chunk)
     assert len(out) == 1
     assert out[0].tool_call_id == "call_A"
@@ -52,13 +55,7 @@ def test_tool_calls_delta_first_emits_id_name() -> None:
 
 def test_tool_calls_delta_args_routes_by_index() -> None:
     """Subsequent args delta lacks `id` — normalizer routes by `index`."""
-    chunk = _chunk([
-        SimpleNamespace(
-            index=0,
-            id=None,
-            function=SimpleNamespace(name=None, arguments='{"path":'),
-        )
-    ])
+    chunk = chunk_with_tool_calls([tool_call_args(0, '{"path":')])
     out = normalize_chunk(chunk)
     assert len(out) == 1
     assert out[0].tool_call_id is None
@@ -66,46 +63,130 @@ def test_tool_calls_delta_args_routes_by_index() -> None:
     assert out[0].args_delta == '{"path":'
 
 
+def test_text_only_chunks_yield_no_normalized_chunks() -> None:
+    """Text chunks (no tool_calls) and finish-only chunks return [] from normalize."""
+    assert normalize_chunk(text_chunk("hello")) == []
+    assert normalize_chunk(finish("stop")) == []
+    assert normalize_chunk(finish("tool_calls")) == []
+
+
+def test_multiple_tool_calls_in_one_chunk() -> None:
+    """One chunk can carry deltas for several tool slots simultaneously."""
+    chunk = chunk_with_tool_calls(
+        [
+            tool_call_first(0, "A", "fa"),
+            tool_call_first(1, "B", "fb"),
+        ]
+    )
+    out = normalize_chunk(chunk)
+    assert len(out) == 2
+    assert out[0].tool_call_id == "A"
+    assert out[1].tool_call_id == "B"
+
+
 async def test_end_to_end_two_tool_sequence() -> None:
-    """Replay two sequential tool_call deltas; expect 2 SealEvents with kind='tool_sealed'."""
-    raw_chunks = [
-        _chunk([
-            SimpleNamespace(
-                index=0,
-                id="call_A",
-                function=SimpleNamespace(name="read_file", arguments=""),
-            )
-        ]),
-        _chunk([
-            SimpleNamespace(
-                index=0,
-                id=None,
-                function=SimpleNamespace(name=None, arguments='{"path":"/a"}'),
-            )
-        ]),
-        _chunk([
-            SimpleNamespace(
-                index=1,
-                id="call_B",
-                function=SimpleNamespace(name="http_get", arguments=""),
-            )
-        ]),
-        _chunk([
-            SimpleNamespace(
-                index=1,
-                id=None,
-                function=SimpleNamespace(name=None, arguments='{"url":"/b"}'),
-            )
-        ]),
-        _chunk([], finish_reason="tool_calls"),
+    """Replay two sequential tool deltas; expect 2 tool_sealed + 1 message_complete."""
+    raw = [
+        chunk_with_tool_calls([tool_call_first(0, "call_A", "read_file")]),
+        chunk_with_tool_calls([tool_call_args(0, '{"path":"/a"}')]),
+        chunk_with_tool_calls([tool_call_first(1, "call_B", "http_get")]),
+        chunk_with_tool_calls([tool_call_args(1, '{"url":"/b"}')]),
+        finish("tool_calls"),
     ]
-
-    async def source():
-        for c in raw_chunks:
-            yield c
-
-    tools: dict[str, Tool] = {}
-    stream = OpenAIEagerStream(source(), tools=tools)
+    tools: dict[str, Tool] = {
+        "read_file": FakeTool("read_file"),
+        "http_get": FakeTool("http_get"),
+    }
+    stream = OpenAIEagerStream(_async_iter(raw), tools=tools)
     seals = [ev async for ev in stream.events()]
-    assert len(seals) == 2
-    assert all(s.kind == "tool_sealed" for s in seals)
+
+    tool_seals = [s for s in seals if s.kind == "tool_sealed"]
+    assert len(tool_seals) == 2
+    assert tool_seals[0].tool_call is not None
+    assert tool_seals[0].tool_call.tool_call_id == "call_A"
+    assert tool_seals[0].tool_call.arguments == {"path": "/a"}
+    assert tool_seals[1].tool_call is not None
+    assert tool_seals[1].tool_call.tool_call_id == "call_B"
+    assert tool_seals[1].tool_call.arguments == {"url": "/b"}
+    assert seals[-1].kind == "message_complete"
+
+    results = {call.tool_call_id: res async for call, res in stream.results()}
+    assert results == {
+        "call_A": {"name": "read_file", "args": {"path": "/a"}},
+        "call_B": {"name": "http_get", "args": {"url": "/b"}},
+    }
+
+
+async def test_text_only_message_yields_message_complete_only() -> None:
+    """A tool-less stream still terminates cleanly with one message_complete."""
+    raw = [
+        text_chunk("hello "),
+        text_chunk("world"),
+        finish("stop"),
+    ]
+    stream = OpenAIEagerStream(_async_iter(raw), tools={})
+    seals = [ev async for ev in stream.events()]
+    assert len(seals) == 1
+    assert seals[0].kind == "message_complete"
+    results = [item async for item in stream.results()]
+    assert results == []
+
+
+async def test_cancel_releases_in_flight_tools() -> None:
+    """Cancelling the events() task during a slow tool releases pool tasks cleanly."""
+    started = asyncio.Event()
+
+    class BlockingTool:
+        name = "block"
+        idempotent = True
+
+        async def __call__(self, arguments: dict[str, Any]) -> Any:
+            del arguments
+            started.set()
+            await asyncio.sleep(60)
+
+    async def slow_source() -> AsyncIterator[Any]:
+        yield chunk_with_tool_calls([tool_call_first(0, "X", "block")])
+        yield chunk_with_tool_calls([tool_call_args(0, "{}")])
+        yield chunk_with_tool_calls([tool_call_first(1, "Y", "block")])  # seals X
+        await asyncio.sleep(60)
+
+    tools: dict[str, Tool] = {"block": BlockingTool()}
+    stream = OpenAIEagerStream(slow_source(), tools=tools)
+
+    seals: list[Any] = []
+
+    async def drain() -> None:
+        async for ev in stream.events():
+            seals.append(ev)
+
+    task = asyncio.create_task(drain())
+    await started.wait()
+    pool = stream._pool  # pyright: ignore[reportPrivateUsage]
+    assert pool.in_flight == 1
+
+    task.cancel()
+    with contextlib.suppress(asyncio.CancelledError):
+        await task
+
+    assert pool.in_flight == 0
+    assert any(s.kind == "tool_sealed" for s in seals)
+
+    results = [item async for item in stream.results()]
+    assert isinstance(results, list)
+
+
+async def test_dispatch_unknown_tool_surfaces_in_results() -> None:
+    """A sealed tool with no matching impl surfaces as KeyError in results()."""
+    raw = [
+        chunk_with_tool_calls([tool_call_first(0, "X", "missing")]),
+        chunk_with_tool_calls([tool_call_args(0, "{}")]),
+        finish("tool_calls"),
+    ]
+    stream = OpenAIEagerStream(_async_iter(raw), tools={})
+    _ = [ev async for ev in stream.events()]
+    results: list[tuple[ToolCall, Any]] = [item async for item in stream.results()]
+    assert len(results) == 1
+    call, exc = results[0]
+    assert call.name == "missing"
+    assert isinstance(exc, KeyError)
