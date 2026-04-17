@@ -12,7 +12,7 @@ concurrency:
 
 jobs:
   lint-and-test:
-    name: lint + test (py${{ matrix.python-version }})
+    name: lint + test (py${{ matrix.python-version }} / ${{ matrix.package }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -22,6 +22,7 @@ jobs:
           - eager-tools-core
           - eager-tools-anthropic
           - eager-tools-openai
+          - eager-tools-langgraph
 
     steps:
       - uses: actions/checkout@v4
@@ -40,24 +41,26 @@ jobs:
 
       - name: Ruff — lint
         working-directory: packages/${{ matrix.package }}
-        run: uv run ruff check src tests
+        run: uv run ruff check .
 
       - name: Ruff — format check
         working-directory: packages/${{ matrix.package }}
-        run: uv run ruff format --check src tests
+        run: uv run ruff format --check .
 
       - name: Pytest
         working-directory: packages/${{ matrix.package }}
         run: uv run pytest -v
 
   typecheck:
-    name: typecheck (pyright strict)
+    name: typecheck (pyright)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
       - name: Install uv
         uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
 
       - name: Set up Python 3.11
         run: uv python install 3.11
@@ -67,25 +70,30 @@ jobs:
         run: uv sync --extra dev
 
       - name: Pyright
-        uses: jakebailey/pyright-action@v2
-        with:
-          version: "1.1.370"
-          working-directory: .
+        working-directory: packages/eager-tools-core
+        run: uv run pyright
 
   bench-smoke:
-    name: bench harness smoke test
+    name: bench harness smoke
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - name: Install uv
         uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
       - name: Set up Python 3.11
         run: uv python install 3.11
-      - name: Skip until bench/ exists
+
+      - name: Install anthropic adapter (bench harness deps)
+        working-directory: packages/eager-tools-anthropic
+        run: uv sync --extra dev
+
+      - name: Smoke-run smallest workload
         run: |
-          if [ -f bench/run.py ]; then
-            cd packages/eager-tools-core && uv sync --extra dev
-            uv run python ../../bench/run.py --smoke
-          else
-            echo "bench/run.py not yet present — skipping"
-          fi
+          uv run \
+            --project packages/eager-tools-anthropic \
+            --with-editable packages/eager-tools-core \
+            python bench/run.py --workload analytics --runs 1 --no-write
