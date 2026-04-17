@@ -108,6 +108,22 @@ example-5: ## examples/05_openrouter_live — needs OPENROUTER_API_KEY
 examples: example-1 example-4 ## Run offline examples (1, 4)
 
 # ---------------------------------------------------------------------------
+# Bench
+# ---------------------------------------------------------------------------
+
+.PHONY: bench
+bench: ## Run synthetic bench, write bench/results.md
+	$(EX_RUN_ANTHRO) bench/run.py
+
+.PHONY: bench-live-anthropic
+bench-live-anthropic: ## Live Anthropic spot-check (needs ANTHROPIC_API_KEY)
+	$(ENV_LOAD) $(EX_RUN_ANTHRO) bench/run.py --live anthropic
+
+.PHONY: bench-live-openai
+bench-live-openai: ## Live OpenAI spot-check (needs OPENAI_API_KEY)
+	$(ENV_LOAD) $(EX_RUN_OPENAI) bench/run.py --live openai
+
+# ---------------------------------------------------------------------------
 # Cleanup
 # ---------------------------------------------------------------------------
 
