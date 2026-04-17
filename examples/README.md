@@ -8,6 +8,7 @@ Runnable demonstrations of the eager-tools API.
 | `02_anthropic_live.py` | Real Claude stream + 3 fake tools. Watch tools fire as their JSON blocks seal. | `ANTHROPIC_API_KEY`, `pip install anthropic` |
 | `03_openai_live.py` | Same harness against GPT-4o. | `OPENAI_API_KEY`, `pip install openai` |
 | `04_cancellation.py` | Mid-flight `stream.cancel()` releases all in-flight tool tasks cleanly. | nothing |
+| `05_openrouter_live.py` | Same harness against OpenRouter (OpenAI-compatible API, any tool-capable model). | `OPENROUTER_API_KEY`, `pip install openai` |
 
 ## Running
 
@@ -18,6 +19,7 @@ python examples/01_minimal.py
 ANTHROPIC_API_KEY=sk-ant-... python examples/02_anthropic_live.py
 OPENAI_API_KEY=sk-...        python examples/03_openai_live.py
 python examples/04_cancellation.py
+OPENROUTER_API_KEY=sk-or-... python examples/05_openrouter_live.py
 ```
 
 For development, you can use either adapter package's venv (each declares its own
