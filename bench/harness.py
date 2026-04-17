@@ -2,7 +2,19 @@
 
 The same `FakeStream` is consumed by all three dispatch modes (sequential,
 parallel, eager) so the comparison is fair: identical chunk timing, identical
-tool latencies, identical workload shape. Deterministic and free to run in CI.
+tool latencies, identical workload shape.
+
+Workloads model 10 real agent scenarios at increasing tool counts (2 → 10).
+Per-tool delays are *estimates* of typical real-world tool behavior:
+
+- file/cache reads, status pings ........... 100–600 ms
+- internal API / DB queries ................ 600–2000 ms
+- external API / LLM sub-calls ............. 1500–5000 ms
+- builds / vuln scans / test suites ........ 3000–15000 ms
+
+Within each workload, tools are ordered to reflect a realistic stream — fast
+and slow tools interleaved, *not* sorted slow-first. Stream offsets are spaced
+to mimic how a model emits tool blocks during generation.
 
 Event shape mirrors `packages/eager-tools-anthropic/tests/fixtures.py`.
 """
@@ -123,82 +135,183 @@ async def _sleep_until(t0: float, target_ms: float) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Workloads
+# Workloads — 10 realistic agent scenarios, tool counts 2 → 10
+#
+# Each workload is a tuple of (tool_name, delay_ms, start_offset_ms). Delays
+# are estimates of typical real-world tool latency; offsets reflect when the
+# model would plausibly emit each tool_use block during the stream. Tools are
+# ordered fast/slow-mixed (not slow-first) to reflect realistic streams.
 # ---------------------------------------------------------------------------
 
 
-def _spread(count: int, total_ms: float, *, start_pad_ms: float = 200.0) -> list[float]:
-    """`count` evenly-spaced offsets within [start_pad_ms, total_ms - start_pad_ms]."""
-    if count == 1:
-        return [start_pad_ms]
-    span = max(0.0, total_ms - 2 * start_pad_ms)
-    step = span / (count - 1) if count > 1 else 0.0
-    return [start_pad_ms + i * step for i in range(count)]
-
-
-def workload_3_analytics() -> Workload:
-    """3-tool analytics query: 3 tools × 1s, ~3s stream."""
-    delays = [1000.0, 1000.0, 1000.0]
-    offsets = _spread(3, 3000.0)
-    names = ["fetch_metric", "fetch_dimension", "fetch_segment"]
+def _workload(
+    name: str,
+    stream_ms: float,
+    specs: list[tuple[str, float, float]],
+) -> Workload:
     return Workload(
-        name="3-tool analytics",
-        stream_duration_ms=3000.0,
+        name=name,
+        stream_duration_ms=stream_ms,
         tools=[
-            ToolSpec(name=n, delay_ms=d, start_offset_ms=o)
-            for n, d, o in zip(names, delays, offsets, strict=True)
+            ToolSpec(name=n, delay_ms=d, start_offset_ms=o) for n, d, o in specs
         ],
     )
 
 
-def workload_8_audit() -> Workload:
-    """8-tool cost audit: mixed 0.5–2s, ~6s stream."""
-    delays = [500.0, 800.0, 1200.0, 1500.0, 700.0, 2000.0, 900.0, 1100.0]
-    offsets = _spread(8, 6000.0)
-    names = [f"audit_{i}" for i in range(8)]
-    return Workload(
-        name="8-tool cost audit",
-        stream_duration_ms=6000.0,
-        tools=[
-            ToolSpec(name=n, delay_ms=d, start_offset_ms=o)
-            for n, d, o in zip(names, delays, offsets, strict=True)
-        ],
-    )
+# 1 — Weather + calendar: a quick personal-assistant turn.
+WORKLOAD_WEATHER = _workload(
+    "weather",
+    stream_ms=1000.0,
+    specs=[
+        ("get_weather",         600.0,  200.0),
+        ("get_calendar_today",  400.0,  600.0),
+    ],
+)
 
+# 2 — Analytics dashboard prefetch.
+WORKLOAD_ANALYTICS = _workload(
+    "analytics",
+    stream_ms=2000.0,
+    specs=[
+        ("fetch_metric",        800.0,  200.0),
+        ("query_dimension",    1500.0,  800.0),
+        ("aggregate_segment",   600.0, 1400.0),
+    ],
+)
 
-def workload_15_security() -> Workload:
-    """15-tool multi-account security sweep: mixed 0.3–4s, ~10s stream."""
-    delays = [
-        300.0,
-        500.0,
-        800.0,
-        1200.0,
-        1500.0,
-        2000.0,
-        2500.0,
-        3000.0,
-        3500.0,
-        4000.0,
-        700.0,
-        900.0,
-        1100.0,
-        1300.0,
-        1700.0,
-    ]
-    offsets = _spread(15, 10000.0)
-    names = [f"scan_{i}" for i in range(15)]
-    return Workload(
-        name="15-tool security sweep",
-        stream_duration_ms=10000.0,
-        tools=[
-            ToolSpec(name=n, delay_ms=d, start_offset_ms=o)
-            for n, d, o in zip(names, delays, offsets, strict=True)
-        ],
-    )
+# 3 — IDE-style code search; grep is the long pole.
+WORKLOAD_CODE_SEARCH = _workload(
+    "search",
+    stream_ms=3000.0,
+    specs=[
+        ("grep_codebase",      1200.0,  200.0),
+        ("read_file",           200.0,  900.0),
+        ("find_definition",     800.0, 1700.0),
+        ("list_imports",        500.0, 2400.0),
+    ],
+)
+
+# 4 — PR review: lint, types, tests, security scan.
+WORKLOAD_PR_REVIEW = _workload(
+    "pr",
+    stream_ms=4000.0,
+    specs=[
+        ("fetch_diff",          600.0,  200.0),
+        ("run_lint",           2000.0,  900.0),
+        ("check_types",        3000.0, 1800.0),
+        ("run_tests",          5000.0, 2500.0),
+        ("security_scan",      1800.0, 3300.0),
+    ],
+)
+
+# 5 — Customer support: order + shipping + ticket lookup.
+WORKLOAD_SUPPORT = _workload(
+    "support",
+    stream_ms=4000.0,
+    specs=[
+        ("lookup_user",         300.0,  200.0),
+        ("fetch_orders",       1500.0,  800.0),
+        ("check_inventory",     800.0, 1400.0),
+        ("get_shipping_status", 600.0, 2000.0),
+        ("read_open_tickets",  1200.0, 2600.0),
+        ("fetch_refund_policy", 200.0, 3300.0),
+    ],
+)
+
+# 6 — Deploy preflight: build is dominant, tests close behind.
+WORKLOAD_DEPLOY = _workload(
+    "deploy",
+    stream_ms=5000.0,
+    specs=[
+        ("check_branch_protection",  200.0,  200.0),
+        ("run_test_suite",          8000.0,  800.0),
+        ("build_container_image",  12000.0, 1500.0),
+        ("scan_image_vulns",        3000.0, 2200.0),
+        ("check_cluster_capacity",   800.0, 2900.0),
+        ("check_billing_quota",      500.0, 3600.0),
+        ("notify_release_channel",   400.0, 4300.0),
+    ],
+)
+
+# 7 — Cost audit: billing + usage rollup with anomaly detection.
+WORKLOAD_COST_AUDIT = _workload(
+    "audit",
+    stream_ms=5000.0,
+    specs=[
+        ("fetch_billing_period",  1500.0,  200.0),
+        ("fetch_usage_breakdown", 2000.0,  800.0),
+        ("fetch_quotas",           800.0, 1400.0),
+        ("group_costs_by_team",   1000.0, 2000.0),
+        ("fetch_forecasts",       3000.0, 2600.0),
+        ("detect_cost_anomalies", 4000.0, 3200.0),
+        ("compare_prior_period",  1200.0, 3800.0),
+        ("export_report",          600.0, 4400.0),
+    ],
+)
+
+# 8 — Incident triage: log + metric + trace fan-out, then post status.
+WORKLOAD_INCIDENT = _workload(
+    "incident",
+    stream_ms=6000.0,
+    specs=[
+        ("fetch_recent_logs",     2500.0,  200.0),
+        ("fetch_error_metrics",   1500.0,  900.0),
+        ("fetch_alert_history",    800.0, 1500.0),
+        ("query_traces",          3500.0, 2100.0),
+        ("list_pod_status",        600.0, 2700.0),
+        ("get_deployment_state",   700.0, 3300.0),
+        ("get_recent_changes",    1200.0, 3900.0),
+        ("fetch_oncall_rotation",  300.0, 4500.0),
+        ("post_status_update",     500.0, 5100.0),
+    ],
+)
+
+# 9 — Security sweep: many long-running scans across surfaces.
+WORKLOAD_SECURITY = _workload(
+    "security",
+    stream_ms=8000.0,
+    specs=[
+        ("scan_dependencies",     5000.0,  200.0),
+        ("scan_secrets",          2000.0, 1000.0),
+        ("scan_iam_policies",     3500.0, 1800.0),
+        ("scan_endpoints",        4000.0, 2600.0),
+        ("scan_network",          6000.0, 3400.0),
+        ("scan_certificates",     1500.0, 4200.0),
+        ("scan_audit_logs",       2500.0, 5000.0),
+        ("scan_storage_perms",    3000.0, 5800.0),
+        ("scan_compliance",       1800.0, 6600.0),
+        ("post_security_report",   500.0, 7400.0),
+    ],
+)
+
+# 10 — Document research: web search → fetch → summarize → cross-ref.
+WORKLOAD_RESEARCH = _workload(
+    "research",
+    stream_ms=7000.0,
+    specs=[
+        ("web_search",            1500.0,  200.0),
+        ("fetch_url_a",            800.0,  900.0),
+        ("fetch_url_b",           1200.0, 1500.0),
+        ("fetch_url_c",            600.0, 2100.0),
+        ("summarize_doc_a",       2500.0, 2700.0),
+        ("summarize_doc_b",       3000.0, 3400.0),
+        ("summarize_doc_c",       2200.0, 4100.0),
+        ("extract_facts",         1500.0, 4800.0),
+        ("cross_reference_claims",1800.0, 5500.0),
+        ("save_research_notes",    400.0, 6200.0),
+    ],
+)
 
 
 WORKLOADS: dict[str, Workload] = {
-    "3": workload_3_analytics(),
-    "8": workload_8_audit(),
-    "15": workload_15_security(),
+    "weather":   WORKLOAD_WEATHER,
+    "analytics": WORKLOAD_ANALYTICS,
+    "search":    WORKLOAD_CODE_SEARCH,
+    "pr":        WORKLOAD_PR_REVIEW,
+    "support":   WORKLOAD_SUPPORT,
+    "deploy":    WORKLOAD_DEPLOY,
+    "audit":     WORKLOAD_COST_AUDIT,
+    "incident":  WORKLOAD_INCIDENT,
+    "security":  WORKLOAD_SECURITY,
+    "research":  WORKLOAD_RESEARCH,
 }
