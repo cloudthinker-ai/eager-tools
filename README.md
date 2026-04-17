@@ -144,7 +144,7 @@ Long version with edge cases: [`docs/when-not-to-use.md`](./docs/when-not-to-use
 |---------|-------|--------------|
 | v0.0.1 | scaffold | Core API shape locked, stubs + golden-trace tests |
 | v0.1 | alpha — adapters + bench shipped | Core + Anthropic + OpenAI adapters, OpenRouter via the OpenAI adapter, 5 examples, synthetic bench |
-| v0.2 | planned | LangGraph `EagerToolNode` |
+| v0.2 | alpha — LangGraph adapter shipped | `eager-tools-langgraph` — `EagerMiddleware` for `langchain.agents.create_agent`, provider-agnostic via LangChain's `tool_call_chunks` |
 | v0.3 | planned | Claude Agent SDK hook |
 
 Follow progress in [`TODO.md`](./TODO.md).

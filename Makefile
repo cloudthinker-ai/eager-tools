@@ -1,9 +1,10 @@
 .DEFAULT_GOAL := help
 
-PACKAGES := eager-tools-core eager-tools-anthropic eager-tools-openai
+PACKAGES := eager-tools-core eager-tools-anthropic eager-tools-openai eager-tools-langgraph
 CORE     := packages/eager-tools-core
 ANTHRO   := packages/eager-tools-anthropic
 OPENAI   := packages/eager-tools-openai
+LANGGRAPH := packages/eager-tools-langgraph
 
 # Auto-load .env if present (export every var while sourcing).
 ENV_LOAD := set -a; [ -f .env ] && . ./.env; set +a;
@@ -31,7 +32,7 @@ install: sync ## Alias for sync
 # ---------------------------------------------------------------------------
 
 .PHONY: test
-test: test-core test-anthropic test-openai ## Run all package test suites
+test: test-core test-anthropic test-openai test-langgraph ## Run all package test suites
 
 .PHONY: test-core
 test-core: ## Run eager-tools-core tests
@@ -44,6 +45,10 @@ test-anthropic: ## Run eager-tools-anthropic tests
 .PHONY: test-openai
 test-openai: ## Run eager-tools-openai tests
 	cd $(OPENAI) && uv run pytest -xvs
+
+.PHONY: test-langgraph
+test-langgraph: ## Run eager-tools-langgraph tests
+	cd $(LANGGRAPH) && uv run pytest -xvs
 
 # ---------------------------------------------------------------------------
 # Lint / format / typecheck
@@ -83,6 +88,7 @@ check: lint fmt-check typecheck test ## Lint + format-check + typecheck + tests
 
 EX_RUN_OPENAI = uv run --project $(OPENAI) --with-editable $(CORE) python
 EX_RUN_ANTHRO = uv run --project $(ANTHRO) --with-editable $(CORE) python
+EX_RUN_LANGGRAPH = uv run --project $(LANGGRAPH) --with-editable $(CORE) --with langchain-anthropic python
 
 .PHONY: example-1
 example-1: ## examples/01_minimal — no key needed
@@ -103,6 +109,10 @@ example-4: ## examples/04_cancellation — no key needed
 .PHONY: example-5
 example-5: ## examples/05_openrouter_live — needs OPENROUTER_API_KEY
 	$(ENV_LOAD) $(EX_RUN_OPENAI) examples/05_openrouter_live.py
+
+.PHONY: example-6
+example-6: ## examples/06_langgraph_live — needs ANTHROPIC_API_KEY + langchain-anthropic
+	$(ENV_LOAD) $(EX_RUN_LANGGRAPH) examples/06_langgraph_live.py
 
 .PHONY: examples
 examples: example-1 example-4 ## Run offline examples (1, 4)

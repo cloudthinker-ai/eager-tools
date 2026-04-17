@@ -114,12 +114,13 @@ Decisions to lock BEFORE writing any code.
 
 ### `eager-tools-langgraph` (~400–600 src LOC)
 
-- [ ] Investigate LangGraph `ToolNode` extension surface — 1 day
-- [ ] Build `EagerToolNode` — custom replacement
-- [ ] Build middleware to intercept LLM stream before it hit the node — ~300 LOC
+- [x] Investigate LangGraph `ToolNode` extension surface — 2026-04-17 (rejected: hard-wired to post-message dispatch; chose `awrap_model_call` middleware seam instead)
+- [x] Build middleware to intercept LLM stream — 2026-04-17 (`EagerMiddleware` ~200 LOC, owns `astream` loop, dispatches via `SealDetector` + `ExecutorPool`, returns `ModelResponse(result=[AIMessage, ToolMessage…])`)
+- [x] Tests: 7 replay + 1 `create_agent` smoke test — 2026-04-17
+- [x] `examples/06_langgraph_live.py` + `make example-6` — 2026-04-17
+- [ ] ~~Build `EagerToolNode` — custom replacement~~ (superseded — middleware is the right seam)
 - [ ] File upstream PR to LangGraph for native streaming hook — `ROADMAP §4.2`
 - [ ] Document monkeypatch fallback if upstream rejects — `ROADMAP §6`
-- [ ] Tests: 500 LOC
 
 ### `eager-tools-claude-agent` (~200–300 src LOC)
 
@@ -197,6 +198,7 @@ Build BEFORE launch, watch monthly. — `ROADMAP §7.2`
 
 > Move completed items here with date + brief outcome.
 
+- [x] 2026-04-17 — **`eager-tools-langgraph` v0.2 shipped** — scaffolded `packages/eager-tools-langgraph/` with `pyproject.toml` (pinned `langgraph>=1.1.6`, `langchain>=1.0`, `langchain-core>=1.2.14` for parallel `tool_call_chunks` merge fix #35281), `chunks.py` (~60 LOC `AIMessageChunk → list[NormalizedChunk]` normalizer, correlate by `index` not `id`), `middleware.py` (~210 LOC `EagerMiddleware(AgentMiddleware)` overriding `awrap_model_call` — owns `request.model.astream(...)`, feeds chunks through `SealDetector`, dispatches idempotent calls eagerly via `ExecutorPool`, drains results into `ModelResponse(result=[AIMessage, ToolMessage₁, …])`). Discovered + fixed `KeyError: 'model'` in `langchain.agents.factory:1514-1516`: the post-model branch only wires `model_destination` if some middleware overrides `after_model`, so EagerMiddleware adds a no-op `after_model` (documented inline). 7 replay tests (single tool, 3 parallel, mixed idempotent+not, unknown tool fallback, parallel-in-one-chunk, text-only, cancellation) + 1 `create_agent` smoke test (stub `BaseChatModel` yields scripted `AIMessageChunk`s, asserts ToolMessage commits without re-running tool node) — all green in 0.22s. `examples/06_langgraph_live.py` + `make example-6` target wired with `langchain-anthropic`. Package README documents version matrix + 5 honest limits (`create_agent` only, per-agent middleware, `add_messages` ordering, lost token visibility under `stream_mode="messages"`, provider chunk shape variance with upstream issue links). ROADMAP §3 v0.2 wave done.
 - [x] 2026-04-17 — **Bench workload expansion + cherry-pick** — grew `bench/harness.py` from 3 → 10 → 30 hardcoded scenarios (`d77b4e1`), then filtered to the 16 workloads where eager beats parallel by ≥1.20× (`dc9c307`); dropped the weak middle band (workloads where the slowest tool dwarfed the stream window or fired too late to overlap) to keep the headline honest. Final range: **1.20×–1.50× across 16 workloads, median ~1.28×**. Refreshed `README.md` headline table (`0189b12`) with three representative rows (3 / 9 / 15 tools) sourced directly from `bench/results.md`, plus a one-line range/median callout. Replaces the prior "3 workloads, 1.0–1.2×" snapshot from earlier today.
 - [x] 2026-04-17 — **Phase 1 polish batch** — landed `bench/` (synthetic harness with 3 workloads, three dispatch modes, p50 reporting, optional `--live` spot-check), `Makefile` targets `bench` / `bench-live-anthropic` / `bench-live-openai`, generated `bench/results.md` (1.0–1.2× over parallel, honestly conservative because synthetic removes network jitter). Rewrote `README.md` hero: measured numbers replace the unsourced 21× boast, broken `from eager_tools.adapters.anthropic import eager_stream` quickstart fixed to use `AnthropicEagerStream`, project layout updated (Makefile, docs/, bench/), Status table bumped from "soon" to "alpha". TODO.md cleanup of Phase 1 items that were already shipped (2026-04-15/16) but still showed `[ ]`.
 - [x] 2026-04-17 — **OpenRouter support** — added `examples/05_openrouter_live.py` reusing the existing `OpenAIEagerStream` adapter (OpenRouter is OpenAI-wire-compatible — only `base_url` + key change), `Makefile example-5` target wired to `.env` autoload via `ENV_LOAD` macro. Verified end-to-end against live OpenRouter; ~5.2s eager vs ~8.2s classic on `openai/gpt-4o-mini`.
