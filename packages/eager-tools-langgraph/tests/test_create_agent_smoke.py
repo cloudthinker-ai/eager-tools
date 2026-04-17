@@ -93,19 +93,8 @@ async def test_create_agent_with_eager_middleware_runs_tool_eagerly() -> None:
             invocations.append(args)
             return add.invoke(args)
 
-    # The model "agent" makes one tool call, the framework runs the next step
-    # which our scripted model also serves — a final text response.
-    model = _ScriptedModel(
-        chunks=[
-            *_make_chunks_calling_add("call_add_1"),
-            # The next agent loop iteration: no tools, just text.
-            AIMessageChunk(content="The answer is 5."),
-        ]
-    )
-
-    # First call returns chunks 0+1 (tool call), second call returns chunk 2 (text).
-    # Easiest way: let the scripted model yield ALL chunks every time, but
-    # `_astream` is invoked on each agent step. Use a per-step script instead.
+    # First model step: tool call. Second step (after eager ToolMessage commits):
+    # final text. The scripted model returns a different sequence per call.
     step_idx = {"i": 0}
     scripts = [
         _make_chunks_calling_add("call_add_1"),
@@ -132,9 +121,11 @@ async def test_create_agent_with_eager_middleware_runs_tool_eagerly() -> None:
     assert invocations == [{"a": 2, "b": 3}]
 
     msgs = result["messages"]
-    # Expect: HumanMessage, AIMessage(tool_call), ToolMessage(=5), AIMessage(text)
+    # Expect: HumanMessage, AIMessage(tool_call=add(2,3)), ToolMessage(=5), AIMessage(text)
     assert isinstance(msgs[0], HumanMessage)
-    assert any(isinstance(m, AIMessage) and m.tool_calls for m in msgs)
+    ai_with_calls = next(m for m in msgs if isinstance(m, AIMessage) and m.tool_calls)
+    assert ai_with_calls.tool_calls[0]["name"] == "add"
+    assert ai_with_calls.tool_calls[0]["args"] == {"a": 2, "b": 3}
     tool_msg = next(m for m in msgs if isinstance(m, ToolMessage))
     assert tool_msg.tool_call_id == "call_add_1"
     assert "5" in str(tool_msg.content)

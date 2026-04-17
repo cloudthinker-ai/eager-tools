@@ -114,9 +114,12 @@ class EagerMiddleware(AgentMiddleware[Any, Any]):
         merged: AIMessageChunk | None = None
 
         try:
+            # NOTE: do NOT re-pass `request.tools` here. `create_agent` has
+            # already bound them on `request.model` before invoking middleware;
+            # passing `tools=` again either duplicates the binding (rejected by
+            # some providers) or overrides `tool_choice` set by the model.
             stream = request.model.astream(
                 request.messages,
-                tools=request.tools or None,
                 **(request.model_settings or {}),
             )
             try:
