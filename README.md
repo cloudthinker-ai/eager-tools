@@ -31,14 +31,15 @@ Parallel tool calling overlaps tools with tools. **Eager tool calling overlaps t
 
 ## Benchmark headline
 
-Synthetic harness — `make bench` reproduces locally in ~90s, deterministic.
+Synthetic harness — `make bench` reproduces locally, deterministic.
+Across 16 workloads (3 → 15 tools), eager beats parallel by **1.20× – 1.50×** (median ~1.28×).
 Full table + repro details: [`bench/results.md`](./bench/results.md).
 
-| Workload | Sequential p50 | Parallel p50 | **Eager p50** | Speedup vs parallel |
-|----------|----------------|--------------|---------------|---------------------|
-| 3-tool analytics | 6.0s | 4.0s | **4.0s** | 1.0× |
-| 8-tool cost audit | 14.7s | 8.0s | **7.1s** | 1.1× |
-| 15-tool security sweep | 35.0s | 14.0s | **11.7s** | 1.2× |
+| Workload | Sequential | Parallel | **Eager** | Speedup vs parallel |
+|----------|------------|----------|-----------|---------------------|
+| 3-tool analytics | 4.90s | 3.50s | **2.90s** | 1.21× |
+| 9-tool incident triage | 17.61s | 9.50s | **6.50s** | 1.46× |
+| 15-tool ad campaign | 30.42s | 11.50s | **8.80s** | 1.31× |
 
 > These are **lower bounds**. The synthetic stream removes network jitter,
 > tail latency, and provider-side variance — the things that make eager
