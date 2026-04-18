@@ -50,6 +50,17 @@ class ExecutorPool:
         self._results: asyncio.Queue[tuple[ToolCall, Any | Exception] | None] = asyncio.Queue()
         self._closed = False
 
+    async def record_error(self, call: ToolCall, exc: BaseException) -> None:
+        """Record an externally-detected error against `call` without dispatching it.
+
+        Used by adapters to surface seal-time parse errors (malformed JSON args,
+        missing tool name) into the same `results()` channel that real tool
+        results flow through. The pool itself never "ran" the tool.
+        """
+        if self._closed:
+            raise RuntimeError("ExecutorPool is closed")
+        await self._results.put((call, exc))
+
     async def dispatch(self, call: ToolCall) -> None:
         """Fire a sealed tool. Raises NonIdempotentToolError for unsafe tools.
 

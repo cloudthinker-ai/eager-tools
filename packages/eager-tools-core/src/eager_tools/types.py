@@ -33,14 +33,23 @@ class ToolCall:
 class SealEvent:
     """A seal boundary on the stream.
 
-    `kind == "tool_sealed"`     → `tool_call` populated; dispatch it.
+    `kind == "tool_sealed"`     → `tool_call` populated; dispatch it (unless
+                                  `parse_error` is set, see below).
     `kind == "message_complete"` → stream ended cleanly.
     `kind == "cancelled"`        → stream aborted; in-flight tools must cancel.
+
+    `parse_error` is set when the detector finished a tool block but couldn't
+    materialize it (malformed JSON args, missing name). `tool_call` still
+    carries the `tool_call_id` for downstream error reporting, but `arguments`
+    is `{}` and the tool MUST NOT be dispatched. Adapters convert these into
+    error tool messages so the model can recover on the next turn instead of
+    the whole stream crashing.
     """
 
     kind: SealKind
     tool_call: ToolCall | None = None
     seal_latency_ms: float | None = None
+    parse_error: BaseException | None = None
 
 
 @runtime_checkable

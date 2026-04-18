@@ -41,6 +41,15 @@ class _ToolBuffer:
             conversation_id=conversation_id,
         )
 
+    def materialize_partial(self, conversation_id: str | None) -> ToolCall:
+        """Best-effort ToolCall used when materialize() fails — id known, args empty."""
+        return ToolCall(
+            tool_call_id=self.tool_call_id,
+            name=self.name or "",
+            arguments={},
+            conversation_id=conversation_id,
+        )
+
 
 class SealDetector:
     """State machine: streaming chunks → SealEvents.
@@ -130,7 +139,18 @@ class SealDetector:
         buf = self._buffers.pop(tool_call_id)
         start_ts = self._buffer_start_ts.pop(tool_call_id, None)
         latency_ms = (time.perf_counter() - start_ts) * 1000.0 if start_ts is not None else 0.0
-        tool_call = buf.materialize(self._conversation_id)
+        try:
+            tool_call = buf.materialize(self._conversation_id)
+        except (ValueError, json.JSONDecodeError) as exc:
+            # Materialization failed (malformed JSON / missing name). Emit the
+            # seal anyway with parse_error set so the adapter can surface a
+            # tool error to the model rather than crashing the whole stream.
+            return SealEvent(
+                kind="tool_sealed",
+                tool_call=buf.materialize_partial(self._conversation_id),
+                seal_latency_ms=latency_ms,
+                parse_error=exc,
+            )
         return SealEvent(
             kind="tool_sealed",
             tool_call=tool_call,

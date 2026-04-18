@@ -77,13 +77,13 @@ class AnthropicEagerStream:
                         args_delta=chunk.args_delta,
                     )
                     if seal is not None and seal.tool_call is not None:
-                        await self._pool.dispatch(seal.tool_call)
+                        await self._handle_seal(seal)
                         yield seal
 
                 if getattr(event, "type", None) == "message_stop":
                     final = self._detector.finalize()
                     if final is not None and final.tool_call is not None:
-                        await self._pool.dispatch(final.tool_call)
+                        await self._handle_seal(final)
                         yield final
                     yield SealEvent(kind="message_complete")
                     await self._pool.close()
@@ -92,7 +92,7 @@ class AnthropicEagerStream:
             # Source ended without an explicit message_stop event.
             final = self._detector.finalize()
             if final is not None and final.tool_call is not None:
-                await self._pool.dispatch(final.tool_call)
+                await self._handle_seal(final)
                 yield final
             yield SealEvent(kind="message_complete")
             await self._pool.close()
@@ -100,6 +100,19 @@ class AnthropicEagerStream:
             await self._pool.cancel_all()
             await self._pool.close()
             raise
+
+    async def _handle_seal(self, seal: SealEvent) -> None:
+        """Dispatch a sealed tool, or push the parse_error onto results without dispatching.
+
+        When `seal.parse_error` is set, the tool block was malformed (bad JSON,
+        missing name) — the call is unsafe to dispatch but the error needs to
+        reach `results()` so the caller can surface it as an error tool message.
+        """
+        assert seal.tool_call is not None
+        if seal.parse_error is not None:
+            await self._pool.record_error(seal.tool_call, seal.parse_error)
+            return
+        await self._pool.dispatch(seal.tool_call)
 
     async def results(self) -> AsyncIterator[tuple[ToolCall, Any | Exception]]:
         """Async iterator of completed tool results, in completion order.

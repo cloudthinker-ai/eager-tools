@@ -210,3 +210,31 @@ async def test_dispatch_unknown_tool_surfaces_in_results() -> None:
     call, exc = results[0]
     assert call.name == "missing"
     assert isinstance(exc, KeyError)
+
+
+async def test_malformed_json_does_not_crash_stream_and_surfaces_in_results() -> None:
+    """Bad JSON args from the model produce an error in results() but don't
+    abort the stream — a subsequent well-formed tool still runs."""
+    import json
+
+    raw = [
+        message_start(),
+        tool_use_start(0, "BAD", "read_file"),
+        input_json_delta(0, '{"broken'),  # never closes
+        content_block_stop(0),
+        tool_use_start(1, "OK", "read_file"),
+        input_json_delta(1, '{"path":"/etc"}'),
+        content_block_stop(1),
+        message_stop(),
+    ]
+    tools: dict[str, Tool] = {"read_file": FakeTool("read_file")}
+    stream = AnthropicEagerStream(_async_iter(raw), tools=tools)
+
+    seal_events = [ev async for ev in stream.events() if ev.kind == "tool_sealed"]
+    assert len(seal_events) == 2
+    bad_seal = next(s for s in seal_events if s.tool_call and s.tool_call.tool_call_id == "BAD")
+    assert isinstance(bad_seal.parse_error, json.JSONDecodeError)
+
+    results = {r[0].tool_call_id: r[1] async for r in stream.results()}
+    assert isinstance(results["BAD"], json.JSONDecodeError)
+    assert results["OK"] == {"name": "read_file", "args": {"path": "/etc"}}

@@ -7,8 +7,6 @@ from __future__ import annotations
 
 import json
 
-import pytest
-
 from eager_tools import SealDetector
 
 
@@ -50,12 +48,53 @@ def test_empty_arg_block_still_seals() -> None:
     assert event.tool_call.arguments == {}
 
 
-def test_malformed_json_raises_on_materialize() -> None:
-    """Broken JSON in args raises JSONDecodeError at seal time."""
+def test_malformed_json_surfaces_as_parse_error_event() -> None:
+    """Broken JSON args produce a SealEvent with parse_error set, not a crash.
+
+    The adapter should convert this into an error tool message; the stream
+    keeps going so the model can recover on the next turn.
+    """
     detector = SealDetector()
     detector.observe(tool_call_id="A", index=0, name="bad_tool", args_delta='{"broken')
-    with pytest.raises(json.JSONDecodeError):
-        detector.finalize()
+    event = detector.finalize()
+    assert event is not None
+    assert event.kind == "tool_sealed"
+    assert isinstance(event.parse_error, json.JSONDecodeError)
+    assert event.tool_call is not None
+    assert event.tool_call.tool_call_id == "A"
+    assert event.tool_call.name == "bad_tool"
+    assert event.tool_call.arguments == {}
+
+
+def test_malformed_json_mid_stream_does_not_block_subsequent_tools() -> None:
+    """Tool A has bad JSON, tool B is well-formed: A seals with parse_error,
+    B seals cleanly. The bad call doesn't poison the rest of the stream."""
+    detector = SealDetector()
+    detector.observe(tool_call_id="A", index=0, name="bad", args_delta='{"x":')
+    seal_a = detector.observe(tool_call_id="B", index=1, name="ok", args_delta='{"y":1}')
+    assert seal_a is not None
+    assert seal_a.parse_error is not None
+    assert seal_a.tool_call is not None and seal_a.tool_call.tool_call_id == "A"
+
+    seal_b = detector.finalize()
+    assert seal_b is not None
+    assert seal_b.parse_error is None
+    assert seal_b.tool_call is not None
+    assert seal_b.tool_call.tool_call_id == "B"
+    assert seal_b.tool_call.arguments == {"y": 1}
+
+
+def test_missing_name_surfaces_as_parse_error_event() -> None:
+    """A tool block that never received a name still seals — with parse_error."""
+    detector = SealDetector()
+    # Provider sent index/args but never a `name` field.
+    detector.observe(tool_call_id="A", index=0, name=None, args_delta='{"k":1}')
+    event = detector.finalize()
+    assert event is not None
+    assert isinstance(event.parse_error, ValueError)
+    assert event.tool_call is not None
+    assert event.tool_call.tool_call_id == "A"
+    assert event.tool_call.name == ""
 
 
 def test_many_interleaved_tools() -> None:

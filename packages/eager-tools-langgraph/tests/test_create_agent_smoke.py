@@ -135,3 +135,71 @@ async def test_create_agent_with_eager_middleware_runs_tool_eagerly() -> None:
     final_text = msgs[-1]
     assert isinstance(final_text, AIMessage)
     assert "5" in str(final_text.content)
+
+
+@pytest.mark.asyncio
+async def test_create_agent_with_eager_middleware_recovers_from_malformed_tool_args() -> None:
+    """A malformed tool call doesn't crash the agent — it surfaces as an
+    error ToolMessage that the model can react to on the next turn."""
+    invocations: list[dict[str, Any]] = []
+
+    @tool
+    def add(a: int, b: int) -> int:
+        """Add two numbers."""
+        return a + b
+
+    class _AddEager:
+        name = "add"
+        idempotent = True
+
+        async def __call__(self, args: dict[str, Any]) -> Any:
+            invocations.append(args)
+            return add.invoke(args)
+
+    bad_chunks = [
+        AIMessageChunk(
+            content="",
+            tool_call_chunks=[{"name": "add", "args": "", "id": "call_bad_1", "index": 0}],
+        ),
+        AIMessageChunk(
+            content="",
+            tool_call_chunks=[{"name": None, "args": '{"a":1, "b":', "id": None, "index": 0}],
+        ),
+    ]
+    step_idx = {"i": 0}
+    scripts = [
+        bad_chunks,
+        [AIMessageChunk(content="Sorry, I'll try again.")],
+    ]
+
+    class _SteppedModel(_ScriptedModel):
+        async def _astream(self, *_a: Any, **_kw: Any) -> AsyncIterator[ChatGenerationChunk]:
+            i = step_idx["i"]
+            step_idx["i"] += 1
+            for chunk in scripts[min(i, len(scripts) - 1)]:
+                yield ChatGenerationChunk(message=chunk)
+
+    model = _SteppedModel(chunks=[])
+
+    agent = create_agent(
+        model=model,
+        tools=[add],
+        middleware=[eager_middleware({"add": _AddEager()})],
+    )
+
+    result = await agent.ainvoke({"messages": [HumanMessage("compute 1+?")]})
+
+    # The eager wrapper was never called — the JSON didn't parse.
+    assert invocations == []
+
+    msgs = result["messages"]
+    # Exactly one ToolMessage for `call_bad_1`, marked as an error.
+    error_msgs = [m for m in msgs if isinstance(m, ToolMessage) and m.tool_call_id == "call_bad_1"]
+    assert len(error_msgs) == 1
+    assert error_msgs[0].status == "error"
+    assert "JSONDecodeError" in str(error_msgs[0].content)
+
+    # The agent moved on to the next model turn — final text is present.
+    final_text = msgs[-1]
+    assert isinstance(final_text, AIMessage)
+    assert "try again" in str(final_text.content)

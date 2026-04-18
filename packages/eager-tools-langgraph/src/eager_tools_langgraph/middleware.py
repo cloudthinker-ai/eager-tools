@@ -130,7 +130,7 @@ class EagerMiddleware(AgentMiddleware[Any, Any]):
                     for nc in normalize_chunk(chunk):
                         seal = detector.observe(**nc.as_kwargs())
                         if seal is not None and seal.tool_call is not None:
-                            await self._dispatch_if_idempotent(pool, seal.tool_call, eager_ids)
+                            await self._handle_seal(pool, seal, eager_ids)
             finally:
                 aclose = getattr(stream, "aclose", None)
                 if aclose is not None:
@@ -139,7 +139,7 @@ class EagerMiddleware(AgentMiddleware[Any, Any]):
 
             final = detector.finalize()
             if final is not None and final.tool_call is not None:
-                await self._dispatch_if_idempotent(pool, final.tool_call, eager_ids)
+                await self._handle_seal(pool, final, eager_ids)
 
             if merged is None:
                 return ModelResponse(result=[AIMessage(content="")])
@@ -154,6 +154,26 @@ class EagerMiddleware(AgentMiddleware[Any, Any]):
             raise
         finally:
             await pool.close()
+
+    async def _handle_seal(
+        self,
+        pool: ExecutorPool,
+        seal: Any,
+        eager_ids: set[str],
+    ) -> None:
+        """Route a SealEvent: parse_error → record as tool error; otherwise dispatch.
+
+        Tracks `tool_call_id` in `eager_ids` for both branches so the
+        middleware emits a ToolMessage for the bad call too — leaving it for
+        the agent's normal tool step would cause a re-execution of an
+        already-malformed call.
+        """
+        assert seal.tool_call is not None
+        if seal.parse_error is not None:
+            await pool.record_error(seal.tool_call, seal.parse_error)
+            eager_ids.add(seal.tool_call.tool_call_id)
+            return
+        await self._dispatch_if_idempotent(pool, seal.tool_call, eager_ids)
 
     async def _dispatch_if_idempotent(
         self,
@@ -193,10 +213,18 @@ class EagerMiddleware(AgentMiddleware[Any, Any]):
             results[call.tool_call_id] = _build_tool_message(call, payload)
 
         ordered: list[ToolMessage] = []
+        seen: set[str] = set()
         for tc in ai_tool_calls:
             tc_id = tc.get("id")
             if tc_id in eager_ids and tc_id in results:
                 ordered.append(results[tc_id])
+                seen.add(tc_id)
+        # Parse-error seals are absent from `ai_msg.tool_calls` (LangChain
+        # routes malformed entries to `invalid_tool_calls` instead). Append
+        # them so the model still sees the error and can recover.
+        for tc_id, msg in results.items():
+            if tc_id not in seen:
+                ordered.append(msg)
         return ordered
 
 
