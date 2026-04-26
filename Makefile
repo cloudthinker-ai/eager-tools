@@ -88,7 +88,7 @@ check: lint fmt-check typecheck test ## Lint + format-check + typecheck + tests
 
 EX_RUN_OPENAI = uv run --project $(OPENAI) --with-editable $(CORE) python
 EX_RUN_ANTHRO = uv run --project $(ANTHRO) --with-editable $(CORE) python
-EX_RUN_LANGGRAPH = uv run --project $(LANGGRAPH) --with-editable $(CORE) --with langchain-anthropic python
+EX_RUN_LANGGRAPH = uv run --project $(LANGGRAPH) --with-editable $(CORE) --with langchain-anthropic --with langchain-openai python
 
 .PHONY: example-1
 example-1: ## examples/01_minimal — no key needed
@@ -113,6 +113,14 @@ example-5: ## examples/05_openrouter_live — needs OPENROUTER_API_KEY
 .PHONY: example-6
 example-6: ## examples/06_langgraph_live — needs ANTHROPIC_API_KEY + langchain-anthropic
 	$(ENV_LOAD) $(EX_RUN_LANGGRAPH) examples/06_langgraph_live.py
+
+.PHONY: example-7
+example-7: ## examples/07_langgraph_openrouter — needs OPENROUTER_API_KEY + langchain-openai
+	$(ENV_LOAD) $(EX_RUN_LANGGRAPH) examples/07_langgraph_openrouter.py
+
+.PHONY: example-8
+example-8: ## examples/08_langgraph_compare — sequential vs parallel vs eager (OPENROUTER_API_KEY)
+	$(ENV_LOAD) $(EX_RUN_LANGGRAPH) examples/08_langgraph_compare.py
 
 .PHONY: examples
 examples: example-1 example-4 ## Run offline examples (1, 4)

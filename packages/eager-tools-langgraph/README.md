@@ -60,8 +60,17 @@ async def main() -> None:
 asyncio.run(main())
 ```
 
-A runnable variant lives in [`examples/06_langgraph_live.py`](../../examples/06_langgraph_live.py)
-— `make example-6` from the repo root with `ANTHROPIC_API_KEY` set.
+Runnable variants:
+
+- [`examples/06_langgraph_live.py`](../../examples/06_langgraph_live.py) — `make example-6`, `ANTHROPIC_API_KEY` + `langchain-anthropic`.
+- [`examples/07_langgraph_openrouter.py`](../../examples/07_langgraph_openrouter.py) — `make example-7`, any tool-capable OpenRouter model via `langchain-openai`.
+- [`examples/08_langgraph_compare.py`](../../examples/08_langgraph_compare.py) — `make example-8`, runs the same workload **sequential vs parallel vs eager** and prints a timing summary.
+
+> **OpenAI-compatible gateways (OpenRouter, vLLM, etc.):** with
+> `ChatOpenAI(base_url=…)`, pre-bind tools via `model.bind_tools([…])` before
+> passing to `create_agent` — the agent's implicit binding doesn't always
+> reach the underlying request. Examples 07 and 08 do this; example 06
+> doesn't need to (`langchain-anthropic` binds correctly).
 
 ---
 
