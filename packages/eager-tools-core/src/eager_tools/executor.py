@@ -4,8 +4,16 @@ The pool's lifetime is owned by the stream reader. When the stream dies
 (user interrupt, model stop sequence, network error), `cancel_all()` releases
 every in-flight tool task cleanly.
 
-Non-idempotent tools are rejected by `dispatch()` — callers must route them to
-the classic (non-eager) path that fires after message_stop.
+`dispatch()` denies eager execution under two conditions, both surfaced as
+subclasses of `EagerDispatchDeniedError`:
+
+- `NonIdempotentToolError` — `tool.idempotent is False` (per-tool blanket deny).
+- `GateDeniedError`        — `tool.gate(call)` returned False or raised
+                             (per-call deny with parsed args visible).
+
+Adapters catch `EagerDispatchDeniedError` and choose how to surface it (record_error,
+silent fall-through to the framework's tool step, etc.). The pool itself never
+records on a denied dispatch.
 
 See METHOD.md §4 for the full runtime contract.
 """
@@ -20,12 +28,32 @@ from typing import Any
 from .types import NOOP_OBSERVABILITY, ObservabilityHook, Tool, ToolCall
 
 
-class NonIdempotentToolError(RuntimeError):
+class EagerDispatchDeniedError(RuntimeError):
+    """Base for any reason a sealed tool MUST NOT fire on the eager path.
+
+    Adapters catch this to route the call elsewhere — record an error,
+    fall through to the framework's tool step, etc. The original cause (if
+    any) is chained on `__cause__`.
+    """
+
+
+class NonIdempotentToolError(EagerDispatchDeniedError):
     """Raised when a non-idempotent tool is offered to the eager executor.
 
     Non-idempotent tools (payments, destructive CLI commands, outbound messages)
     must NOT fire before `message_stop` — the model may retract them mid-stream.
-    Callers should catch this and route to the classic dispatch path.
+    Callers should catch this (or its base `EagerDispatchDeniedError`) and route to
+    the classic dispatch path.
+    """
+
+
+class GateDeniedError(EagerDispatchDeniedError):
+    """Raised when a tool's per-call `gate(call)` denies eager dispatch.
+
+    Either `gate` returned False (denial) or `gate` raised (treated as denial,
+    with the original exception chained on `__cause__`). Sibling — not
+    subclass — of `NonIdempotentToolError`: gate denial is a per-call,
+    args-aware decision; idempotency is a per-tool blanket policy.
     """
 
 
@@ -62,10 +90,21 @@ class ExecutorPool:
         await self._results.put((call, exc))
 
     async def dispatch(self, call: ToolCall) -> None:
-        """Fire a sealed tool. Raises NonIdempotentToolError for unsafe tools.
+        """Fire a sealed tool. Raises `EagerDispatchDeniedError` if the call cannot
+        run on the eager path (non-idempotent tool, or per-call gate denied).
 
         Returns immediately — the tool runs on a background task. Results arrive
         via `results()`.
+
+        On denial, the pool does NOT push to `_results`. The caller decides
+        whether to record the error, fall through to a framework's tool step,
+        or ignore the call entirely.
+
+        Cancellation: if the calling task is cancelled while `await gate(call)`
+        is suspended, the gate task receives `CancelledError` and propagates
+        per asyncio semantics — same contract as tool execution. Gates with
+        side effects (queue inserts, audit logs) must clean up in their own
+        `try/finally`.
         """
         if self._closed:
             raise RuntimeError("ExecutorPool is closed")
@@ -77,6 +116,20 @@ class ExecutorPool:
             raise NonIdempotentToolError(
                 f"Tool {call.name!r} is not idempotent; eager dispatch forbidden."
             )
+        gate = getattr(tool, "gate", None)
+        if gate is not None:
+            try:
+                allowed = await gate(call)
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                raise GateDeniedError(
+                    f"Gate for {call.name!r} raised; eager dispatch denied."
+                ) from exc
+            if not allowed:
+                raise GateDeniedError(
+                    f"Gate for {call.name!r} returned False; eager dispatch denied."
+                )
         self._safe_hook("on_dispatch_start", call)
         task = asyncio.create_task(self._run_one(call, tool), name=f"eager-{call.tool_call_id}")
         self._in_flight.add(task)
@@ -134,4 +187,9 @@ class ExecutorPool:
             getattr(self._observability, name)(*args)
 
 
-__all__ = ["ExecutorPool", "NonIdempotentToolError"]
+__all__ = [
+    "EagerDispatchDeniedError",
+    "ExecutorPool",
+    "GateDeniedError",
+    "NonIdempotentToolError",
+]

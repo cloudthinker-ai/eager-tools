@@ -10,7 +10,14 @@ from typing import Any
 
 import pytest
 
-from eager_tools import ExecutorPool, NonIdempotentToolError, SealEvent, ToolCall
+from eager_tools import (
+    EagerDispatchDeniedError,
+    ExecutorPool,
+    GateDeniedError,
+    NonIdempotentToolError,
+    SealEvent,
+    ToolCall,
+)
 
 
 class FakeTool:
@@ -160,6 +167,183 @@ async def test_in_flight_property_tracks_live_tasks() -> None:
     await pool.close()
     _ = [item async for item in pool.results()]
     assert pool.in_flight == 0
+
+
+async def test_gate_allows_dispatch() -> None:
+    """A tool whose `gate` returns True dispatches normally."""
+
+    class GatedTool:
+        name = "read_file"
+        idempotent = True
+
+        async def gate(self, call: ToolCall) -> bool:
+            del call
+            return True
+
+        async def __call__(self, arguments: dict[str, Any]) -> Any:
+            return {"path": arguments.get("path"), "ran": True}
+
+    pool = ExecutorPool({"read_file": GatedTool()})
+    await pool.dispatch(_call("read_file", path="/var/log/app.log"))
+    await pool.close()
+    results = [item async for item in pool.results()]
+    assert len(results) == 1
+    _, payload = results[0]
+    assert payload == {"path": "/var/log/app.log", "ran": True}
+
+
+async def test_gate_denies_raises_gate_denied_error() -> None:
+    """Gate returning False raises `GateDeniedError`. `EagerDispatchDeniedError`
+    catches it; `NonIdempotentToolError` does NOT (sibling, not subclass).
+    Pool does NOT push to results on this path.
+    """
+
+    class DenyingTool:
+        name = "read_file"
+        idempotent = True
+
+        async def gate(self, call: ToolCall) -> bool:
+            del call
+            return False
+
+        async def __call__(self, arguments: dict[str, Any]) -> Any:
+            del arguments
+            return {"unreachable": True}
+
+    pool = ExecutorPool({"read_file": DenyingTool()})
+    with pytest.raises(GateDeniedError) as info:
+        await pool.dispatch(_call("read_file", path="/etc/shadow"))
+    # Hierarchy contract: catchable as the shared base.
+    assert isinstance(info.value, EagerDispatchDeniedError)
+    # Sibling, not subclass — different remediation paths.
+    assert not isinstance(info.value, NonIdempotentToolError)
+
+    await pool.close()
+    results = [item async for item in pool.results()]
+    assert results == []
+
+
+async def test_gate_exception_chains_via_cause() -> None:
+    """If gate raises, the original exception is chained on `__cause__`."""
+
+    class RaisingGateTool:
+        name = "read_file"
+        idempotent = True
+
+        async def gate(self, call: ToolCall) -> bool:
+            del call
+            raise ValueError("policy denied")
+
+        async def __call__(self, arguments: dict[str, Any]) -> Any:
+            del arguments
+            return None
+
+    pool = ExecutorPool({"read_file": RaisingGateTool()})
+    with pytest.raises(GateDeniedError) as info:
+        await pool.dispatch(_call("read_file"))
+    assert isinstance(info.value.__cause__, ValueError)
+    assert str(info.value.__cause__) == "policy denied"
+
+    await pool.close()
+    results = [item async for item in pool.results()]
+    assert results == []
+
+
+async def test_gate_cancellation_propagates() -> None:
+    """Cancelling the dispatch task while the gate is awaiting cancels the gate.
+
+    Mirrors the tool execution contract: gates with side effects are
+    responsible for their own cleanup via try/finally.
+    """
+    started = asyncio.Event()
+    cancelled = asyncio.Event()
+
+    class HangingGateTool:
+        name = "slow"
+        idempotent = True
+
+        async def gate(self, call: ToolCall) -> bool:
+            del call
+            started.set()
+            try:
+                await asyncio.sleep(60)
+                return True
+            except asyncio.CancelledError:
+                cancelled.set()
+                raise
+
+        async def __call__(self, arguments: dict[str, Any]) -> Any:
+            del arguments
+            return None
+
+    pool = ExecutorPool({"slow": HangingGateTool()})
+    task = asyncio.create_task(pool.dispatch(_call("slow")))
+    await started.wait()
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    assert cancelled.is_set()
+
+
+async def test_non_idempotent_short_circuits_before_gate() -> None:
+    """Idempotency check runs first. A non-idempotent tool with a gate must
+    raise `NonIdempotentToolError` and the gate must NOT be invoked. Locks
+    in the per-tool blanket-deny invariant so a future refactor that swaps
+    the order (gate-first) can't silently let gates with side effects fire
+    for non-idempotent tools.
+    """
+
+    class UnsafeGatedTool:
+        def __init__(self) -> None:
+            self.name = "send_email"
+            self.idempotent = False
+            self.gate_called = False
+
+        async def gate(self, call: ToolCall) -> bool:
+            del call
+            self.gate_called = True
+            return True
+
+        async def __call__(self, arguments: dict[str, Any]) -> Any:
+            del arguments
+            return "sent"
+
+    tool = UnsafeGatedTool()
+    pool = ExecutorPool({"send_email": tool})
+    with pytest.raises(NonIdempotentToolError):
+        await pool.dispatch(_call("send_email"))
+    assert tool.gate_called is False
+    await pool.close()
+
+
+async def test_gate_fn_alias_reexported() -> None:
+    """Smoke: `GateFn` is importable from the public package and matches the
+    documented `Callable[[ToolCall], Awaitable[bool]]` signature shape.
+    """
+    from eager_tools import GateFn
+
+    assert GateFn is not None
+    # Concrete async callable taking ToolCall → bool satisfies the alias at
+    # runtime (typing-only check; this just pins the re-export).
+
+    async def _gate(call: ToolCall) -> bool:
+        del call
+        return True
+
+    fn: GateFn = _gate  # noqa: F841 — pin assignment compatibility
+
+
+async def test_no_gate_attribute_dispatches_normally() -> None:
+    """Tools without a `gate` attribute are unaffected — duck-typed lookup."""
+    tool = FakeTool("read_file")
+    assert not hasattr(tool, "gate")
+    pool = ExecutorPool({"read_file": tool})
+    await pool.dispatch(_call("read_file", path="/tmp"))
+    await pool.close()
+    results = [item async for item in pool.results()]
+    assert len(results) == 1
+    _, payload = results[0]
+    assert payload == {"ok": True, "path": "/tmp"}
 
 
 async def test_observer_exception_does_not_break_dispatch() -> None:

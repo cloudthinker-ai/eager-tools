@@ -293,6 +293,141 @@ async def test_observer_on_seal_exception_does_not_break_stream() -> None:
     assert results == {"A": {"name": "read_file", "args": {"path": "/a"}}}
 
 
+async def test_non_idempotent_tool_does_not_crash_stream() -> None:
+    """Registering a non-idempotent tool used to crash the stream because
+    `_handle_seal` called `pool.dispatch(...)` without a guard. The 0.2.0
+    fix wraps it in `try/except EagerDispatchDeniedError` and records the
+    denial in `results()`. This regression test pins that contract — a
+    future cleanup that narrows the catch to `except GateDeniedError` would
+    re-introduce the crash, which gate tests alone wouldn't catch.
+    """
+    from eager_tools import NonIdempotentToolError
+
+    class UnsafeTool:
+        name = "send_email"
+        idempotent = False
+
+        async def __call__(self, arguments: dict[str, Any]) -> Any:
+            del arguments
+            return "sent"
+
+    raw = [
+        tool_use_start(0, "U", "send_email"),
+        input_json_delta(0, '{"to":"x"}'),
+        content_block_stop(0),
+        message_stop(),
+    ]
+    tools: dict[str, Tool] = {"send_email": UnsafeTool()}
+    stream = AnthropicEagerStream(_async_iter(raw), tools=tools)
+
+    seals = [ev async for ev in stream.events()]
+    assert seals[-1].kind == "message_complete"
+
+    results = {r[0].tool_call_id: r[1] async for r in stream.results()}
+    assert isinstance(results["U"], NonIdempotentToolError)
+
+
+async def test_gated_tool_surfaces_as_error_in_results() -> None:
+    """Tool with `gate` returning False → original gate failure surfaces in
+    `results()`; subsequent allowed tools still dispatch.
+    """
+
+    class GatedTool:
+        name = "read_file"
+        idempotent = True
+
+        async def gate(self, call: ToolCall) -> bool:
+            return not call.arguments.get("path", "").startswith("/etc/")
+
+        async def __call__(self, arguments: dict[str, Any]) -> Any:
+            return {"name": "read_file", "args": arguments}
+
+    raw = [
+        tool_use_start(0, "BAD", "read_file"),
+        input_json_delta(0, '{"path":"/etc/shadow"}'),
+        content_block_stop(0),
+        tool_use_start(1, "OK", "read_file"),
+        input_json_delta(1, '{"path":"/var/log/app"}'),
+        content_block_stop(1),
+        message_stop(),
+    ]
+    tools: dict[str, Tool] = {"read_file": GatedTool()}
+    stream = AnthropicEagerStream(_async_iter(raw), tools=tools)
+
+    seals = [ev async for ev in stream.events()]
+    assert any(s.kind == "tool_sealed" for s in seals)
+
+    results = {r[0].tool_call_id: r[1] async for r in stream.results()}
+    # Gate denial surfaces as GateDeniedError (no __cause__ when gate returns False).
+    from eager_tools import GateDeniedError
+
+    assert isinstance(results["BAD"], GateDeniedError)
+    assert results["OK"] == {"name": "read_file", "args": {"path": "/var/log/app"}}
+
+
+async def test_slow_gate_blocks_stream_progress() -> None:
+    """Critical-path contract: a slow gate halts chunk consumption — the next
+    tool block cannot seal until the gate releases.
+
+    Locks in the documented "gates must be sync-fast" invariant. If this ever
+    passes accidentally (because someone "fixed" the blocking by decoupling
+    gate evaluation from the stream task), the eager invariant is broken;
+    treat as a structural regression.
+    """
+    gate_started = asyncio.Event()
+    gate_release = asyncio.Event()
+    second_chunk_consumed = asyncio.Event()
+
+    class SlowGateTool:
+        name = "slow"
+        idempotent = True
+
+        async def gate(self, call: ToolCall) -> bool:
+            del call
+            gate_started.set()
+            await gate_release.wait()
+            return True
+
+        async def __call__(self, arguments: dict[str, Any]) -> Any:
+            del arguments
+            return "done"
+
+    async def source() -> AsyncIterator[Any]:
+        yield tool_use_start(0, "A", "slow")
+        yield input_json_delta(0, "{}")
+        yield content_block_stop(0)
+        # The next chunk seals A; once we yield it the consumer should be
+        # blocked on the gate before processing the seal that follows.
+        yield tool_use_start(1, "B", "slow")
+        # Mark that we made it past yielding the second-block start. If gate
+        # blocks the consumer task, the consumer will not have read this far
+        # by the time we check.
+        second_chunk_consumed.set()
+        yield input_json_delta(1, "{}")
+        yield content_block_stop(1)
+        yield message_stop()
+
+    tools: dict[str, Tool] = {"slow": SlowGateTool()}
+    stream = AnthropicEagerStream(source(), tools=tools)
+    seals: list[Any] = []
+
+    async def drain() -> None:
+        async for ev in stream.events():
+            seals.append(ev)
+
+    task = asyncio.create_task(drain())
+    await gate_started.wait()
+    # Give the consumer a tick to attempt subsequent reads — it must not get
+    # past the gate await. The source only yields after the consumer asks for
+    # the next item, so the gate-blocked consumer means no further yields.
+    await asyncio.sleep(0.05)
+    assert not second_chunk_consumed.is_set(), "consumer drained past gate; eager invariant broken"
+
+    gate_release.set()
+    await task
+    assert second_chunk_consumed.is_set()
+
+
 async def test_malformed_json_does_not_crash_stream_and_surfaces_in_results() -> None:
     """Bad JSON args from the model produce an error in results() but don't
     abort the stream — a subsequent well-formed tool still runs."""

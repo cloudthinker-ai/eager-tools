@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "eager-tools-openai"
-version = "0.0.1"
+version = "0.2.0"
 description = "OpenAI adapter for eager tool calling — wraps chat.completions streaming to emit SealEvents."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -18,7 +18,7 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
     "Typing :: Typed",
 ]
-dependencies = ["eager-tools-core>=0.0.1"]
+dependencies = ["eager-tools-core>=0.2.0"]
 
 [project.optional-dependencies]
 dev = [

@@ -5,7 +5,7 @@ Public API:
     from eager_tools import (
         SealDetector, ExecutorPool,
         ToolCall, SealEvent, Tool, ObservabilityHook,
-        NonIdempotentToolError,
+        EagerDispatchDeniedError, NonIdempotentToolError, GateDeniedError, GateFn,
     )
 
 See the repository `METHOD.md` for the mechanism and runtime contract.
@@ -14,10 +14,16 @@ See the repository `METHOD.md` for the mechanism and runtime contract.
 from __future__ import annotations
 
 from .core import SealDetector
-from .executor import ExecutorPool, NonIdempotentToolError
+from .executor import (
+    EagerDispatchDeniedError,
+    ExecutorPool,
+    GateDeniedError,
+    NonIdempotentToolError,
+)
 from .observability import OTelObservability
 from .types import (
     NOOP_OBSERVABILITY,
+    GateFn,
     ObservabilityHook,
     SealEvent,
     SealKind,
@@ -25,11 +31,14 @@ from .types import (
     ToolCall,
 )
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 __all__ = [
     "NOOP_OBSERVABILITY",
+    "EagerDispatchDeniedError",
     "ExecutorPool",
+    "GateDeniedError",
+    "GateFn",
     "NonIdempotentToolError",
     "OTelObservability",
     "ObservabilityHook",

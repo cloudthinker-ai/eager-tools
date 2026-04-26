@@ -153,7 +153,7 @@ For the per-block mechanism (chunks → buffer → seal → dispatch), see
 
 - **Fast tools (sub-50ms).** Seal/dispatch overhead exceeds the latency saved.
 - **Sequentially dependent tools.** If tool B needs tool A's result, the model won't emit B until A returns — no pipeline opportunity.
-- **Non-idempotent tools.** Payments, destructive commands, outbound messages. Route these to the classic path via `Tool.idempotent = False` — the runtime does it for you.
+- **Non-idempotent tools.** Payments, destructive commands, outbound messages. Route these to the classic path via `Tool.idempotent = False` for blanket denial, or via a per-call `gate` callable for case-by-case decisions with parsed args visible (e.g. allow `read_file` but not under `/etc/`). See [`docs/hitl.md`](./docs/hitl.md). The gate still gates the *eager* path; the underlying tool still runs at the framework's tool step for non-denied calls.
 - **Non-streaming backends.** If your gateway buffers the full response, eager dispatch is impossible.
 
 Long version with edge cases: [`docs/when-not-to-use.md`](./docs/when-not-to-use.md).

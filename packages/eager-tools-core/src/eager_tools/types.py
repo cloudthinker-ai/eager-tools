@@ -9,10 +9,27 @@ Stability: the runtime itself may change freely until v1.0. These types must not
 
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any, Literal, Protocol, runtime_checkable
 
 SealKind = Literal["tool_sealed", "message_complete", "cancelled"]
+
+
+GateFn = Callable[["ToolCall"], Awaitable[bool]]
+"""Per-call gate signature.
+
+A gate inspects a sealed `ToolCall` and returns `True` to allow eager
+dispatch or `False` to deny it. Returning `False` (or raising) routes the
+call off the eager path — the adapter surfaces the denial in `results()`,
+or the framework's tool step picks the call up.
+
+Gates are awaited inside the same task that consumes the LLM stream; a slow
+gate starves the stream and may trip provider keepalive. Keep gates
+sync-fast (in-memory predicates, cached policy lookups). Slow approval
+flows belong at the agent-framework layer (e.g. LangGraph `interrupt()`),
+not in the gate.
+"""
 
 
 @dataclass(frozen=True, slots=True)
@@ -58,6 +75,21 @@ class Tool(Protocol):
 
     `idempotent=False` tools are routed to the classic (non-eager) path
     automatically — they only execute after message_stop.
+
+    Optional per-call gate (duck-typed, not declared on this Protocol so adding
+    one to an existing tool stays backward-compatible):
+
+        class ReadFile:
+            name = "read_file"
+            idempotent = True
+
+            async def gate(self, call: ToolCall) -> bool:
+                return not call.arguments["path"].startswith("/etc/")
+
+            async def __call__(self, arguments): ...
+
+    The runtime reads `getattr(tool, "gate", None)` after the idempotency check.
+    See `GateFn` for the signature contract and the critical-path warning.
     """
 
     name: str

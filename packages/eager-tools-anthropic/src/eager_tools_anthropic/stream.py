@@ -18,6 +18,7 @@ from typing import Any
 
 from eager_tools import (
     NOOP_OBSERVABILITY,
+    EagerDispatchDeniedError,
     ExecutorPool,
     ObservabilityHook,
     SealDetector,
@@ -120,17 +121,27 @@ class AnthropicEagerStream:
             self._observability.on_seal(seal)
 
     async def _handle_seal(self, seal: SealEvent) -> None:
-        """Dispatch a sealed tool, or push the parse_error onto results without dispatching.
+        """Dispatch a sealed tool, or surface a denial/parse_error in results
+        without dispatching.
 
         When `seal.parse_error` is set, the tool block was malformed (bad JSON,
         missing name) — the call is unsafe to dispatch but the error needs to
         reach `results()` so the caller can surface it as an error tool message.
+
+        When eager dispatch is denied (non-idempotent tool, gate vetoed), the
+        original exception (or its `__cause__`) is recorded in `results()`
+        instead — the user can decide whether to synthesize a tool message,
+        queue for offline approval, or ignore.
         """
         assert seal.tool_call is not None
         if seal.parse_error is not None:
             await self._pool.record_error(seal.tool_call, seal.parse_error)
             return
-        await self._pool.dispatch(seal.tool_call)
+        try:
+            await self._pool.dispatch(seal.tool_call)
+        except EagerDispatchDeniedError as exc:
+            surfaced = exc.__cause__ or exc
+            await self._pool.record_error(seal.tool_call, surfaced)
 
     async def results(self) -> AsyncIterator[tuple[ToolCall, Any | Exception]]:
         """Async iterator of completed tool results, in completion order.

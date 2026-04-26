@@ -133,6 +133,52 @@ async def test_non_idempotent_tool_falls_through() -> None:
 
 
 @pytest.mark.asyncio
+async def test_gated_tool_falls_through() -> None:
+    """Tool with `gate` returning False is preserved on the AIMessage so the
+    agent's tool node picks it up; middleware emits no ToolMessage for it.
+
+    Mirrors `test_non_idempotent_tool_falls_through` — the LangGraph
+    composition contract is that gate denial behaves identically to
+    non-idempotent denial at the middleware boundary.
+    """
+
+    class GatedTool:
+        def __init__(self) -> None:
+            self.name = "read_file"
+            self.idempotent = True
+            self.calls: list[dict[str, Any]] = []
+
+        async def gate(self, call: Any) -> bool:
+            return not call.arguments.get("path", "").startswith("/etc/")
+
+        async def __call__(self, arguments: dict[str, Any]) -> Any:
+            self.calls.append(arguments)
+            return {"path": arguments["path"]}
+
+    tool = GatedTool()
+    safe = _RecordingTool("safe", payload="ok")
+    mw = EagerMiddleware({"read_file": tool, "safe": safe})
+    model = script(
+        tool_chunk(index=0, tool_id="call_blocked", name="read_file", args='{"path":"/etc/x"}'),
+        tool_chunk(index=1, tool_id="call_safe", name="safe", args="{}"),
+    )
+
+    response = await _run(mw, model)
+
+    # Gate fired; underlying tool MUST NOT have been invoked by the middleware.
+    assert tool.calls == []
+    assert safe.calls == [{}]
+
+    ai_msg = response.result[0]
+    tool_msgs = response.result[1:]
+    assert isinstance(ai_msg, AIMessage)
+    # AIMessage preserves both — the agent's tool step picks up the gated one.
+    assert {tc["id"] for tc in ai_msg.tool_calls} == {"call_blocked", "call_safe"}
+    # Middleware emits ToolMessage only for the eagerly-resolved tool.
+    assert [m.tool_call_id for m in tool_msgs] == ["call_safe"]
+
+
+@pytest.mark.asyncio
 async def test_unknown_tool_yields_error_tool_message() -> None:
     """ExecutorPool's unknown-tool KeyError surfaces as a ToolMessage(status=error)."""
     mw = EagerMiddleware({})  # registry is empty

@@ -22,8 +22,8 @@ from typing import Any
 
 from eager_tools import (
     NOOP_OBSERVABILITY,
+    EagerDispatchDeniedError,
     ExecutorPool,
-    NonIdempotentToolError,
     ObservabilityHook,
     SealDetector,
     Tool,
@@ -178,19 +178,23 @@ class EagerMiddleware(AgentMiddleware[Any, Any]):
             await pool.record_error(seal.tool_call, seal.parse_error)
             eager_ids.add(seal.tool_call.tool_call_id)
             return
-        await self._dispatch_if_idempotent(pool, seal.tool_call, eager_ids)
+        await self._dispatch_if_eligible(pool, seal.tool_call, eager_ids)
 
-    async def _dispatch_if_idempotent(
+    async def _dispatch_if_eligible(
         self,
         pool: ExecutorPool,
         call: ToolCall,
         eager_ids: set[str],
     ) -> None:
-        """Try eager dispatch. Idempotent tool → fire. Non-idempotent → skip silently."""
+        """Try eager dispatch. Idempotent + gate-passed → fire. Denied → skip
+        silently so the agent's normal tool step picks the call up. Standard
+        LangGraph HITL primitives (`HumanInTheLoopMiddleware`, `interrupt()`)
+        gate at THAT layer.
+        """
         try:
             await pool.dispatch(call)
             eager_ids.add(call.tool_call_id)
-        except NonIdempotentToolError:
+        except EagerDispatchDeniedError:
             pass
 
     async def _drain_tool_results(
