@@ -1,0 +1,195 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 460" role="img"
+     aria-label="Animated timeline comparing parallel tool calling against eager tool calling on the same workload.">
+  <title>Parallel vs eager tool calling — same workload, side by side</title>
+  <desc>Two timelines stacked. The top timeline shows classic parallel tool calling: a 4-second model stream followed by three tools running concurrently for 2.5 seconds, totalling 6.5 seconds. The bottom timeline shows eager tool calling: the same 4-second stream, with the first two tools dispatched mid-stream and overlapping with generation, finishing in 4.5 seconds. A vertical playhead sweeps across both timelines, then the bars reset and the cycle repeats.</desc>
+
+  <defs>
+    <style>
+      .bg { fill: #0f172a; }
+      .panel { fill: #111827; stroke: #1f2937; stroke-width: 1; }
+      .axis { stroke: #334155; stroke-width: 1; }
+      .tick { stroke: #334155; stroke-width: 1; }
+      .tick-label { fill: #64748b; font: 10px ui-monospace, SFMono-Regular, Menlo, monospace; }
+      .row-label { fill: #cbd5e1; font: 600 13px ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+      .bar-label { fill: #94a3b8; font: 11px ui-monospace, SFMono-Regular, Menlo, monospace; }
+      .total { fill: #e2e8f0; font: 700 13px ui-monospace, SFMono-Regular, Menlo, monospace; }
+      .total-eager { fill: #34d399; }
+      .header { fill: #f1f5f9; font: 700 16px ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+      .sub { fill: #94a3b8; font: 12px ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+      .stream { fill: #64748b; }
+      .tool-slow { fill: #f59e0b; }
+      .tool-fast { fill: #10b981; }
+      .playhead { stroke: #22d3ee; stroke-width: 2; opacity: 0.8; }
+      .savings { fill: #22d3ee; opacity: 0.12; }
+      .savings-label { fill: #22d3ee; font: 600 11px ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+    </style>
+  </defs>
+
+  <!-- background -->
+  <rect class="bg" x="0" y="0" width="800" height="460"/>
+
+  <!-- header -->
+  <text class="header" x="40" y="34">Same workload — parallel vs eager dispatch</text>
+  <text class="sub" x="40" y="54">3 tools, 4s model stream, 2.5s slowest tool. Eager overlaps tools with generation.</text>
+
+  <!-- ============================ ROW 1: PARALLEL ============================ -->
+  <rect class="panel" x="32" y="76" width="736" height="146" rx="6"/>
+  <text class="row-label" x="48" y="98">Classic parallel tool calling</text>
+  <text class="sub" x="48" y="114">tools fire after message_stop · totaltime = stream + max(tool)</text>
+
+  <!-- row-1 bars: chart x-origin = 132, 1s = 80px, ends at x=132+8*80=772 (we use up to 6.5s = 132+520=652) -->
+  <!-- stream bar -->
+  <text class="bar-label" x="56" y="143">stream</text>
+  <rect class="stream" x="132" y="132" height="14" rx="3">
+    <animate attributeName="width"
+             dur="8s" repeatCount="indefinite"
+             keyTimes="0; 0.0625; 0.5625; 0.975; 0.99; 1"
+             values="0; 0; 320; 320; 0; 0"/>
+  </rect>
+
+  <!-- tool A: 4 → 6 -->
+  <text class="bar-label" x="56" y="165">tool A</text>
+  <rect class="tool-slow" x="452" y="154" height="11" rx="3">
+    <animate attributeName="width"
+             dur="8s" repeatCount="indefinite"
+             keyTimes="0; 0.5625; 0.8125; 0.975; 0.99; 1"
+             values="0; 0; 160; 160; 0; 0"/>
+  </rect>
+
+  <!-- tool B: 4 → 5.5 -->
+  <text class="bar-label" x="56" y="183">tool B</text>
+  <rect class="tool-slow" x="452" y="172" height="11" rx="3">
+    <animate attributeName="width"
+             dur="8s" repeatCount="indefinite"
+             keyTimes="0; 0.5625; 0.75; 0.975; 0.99; 1"
+             values="0; 0; 120; 120; 0; 0"/>
+  </rect>
+
+  <!-- tool C: 4 → 6.5  (longest — defines total) -->
+  <text class="bar-label" x="56" y="201">tool C</text>
+  <rect class="tool-slow" x="452" y="190" height="11" rx="3">
+    <animate attributeName="width"
+             dur="8s" repeatCount="indefinite"
+             keyTimes="0; 0.5625; 0.875; 0.975; 0.99; 1"
+             values="0; 0; 200; 200; 0; 0"/>
+  </rect>
+
+  <!-- parallel total marker -->
+  <text class="total" x="660" y="200" opacity="0">
+    Total: 6.5s
+    <animate attributeName="opacity"
+             dur="8s" repeatCount="indefinite"
+             keyTimes="0; 0.875; 0.88; 0.975; 0.99; 1"
+             values="0; 0; 1; 1; 0; 0"/>
+  </text>
+
+  <!-- ============================ ROW 2: EAGER ============================ -->
+  <rect class="panel" x="32" y="240" width="736" height="146" rx="6"/>
+  <text class="row-label" x="48" y="262">Eager tool calling</text>
+  <text class="sub" x="48" y="278">each tool fires the moment its block seals · total = max(stream, max(tool_end))</text>
+
+  <!-- highlight band: time saved -->
+  <rect class="savings" x="492" y="290" width="160" height="80" rx="4">
+    <animate attributeName="opacity"
+             dur="8s" repeatCount="indefinite"
+             keyTimes="0; 0.875; 0.9; 0.975; 0.99; 1"
+             values="0; 0; 0.18; 0.18; 0; 0"/>
+  </rect>
+
+  <!-- stream bar (same as parallel) -->
+  <text class="bar-label" x="56" y="307">stream</text>
+  <rect class="stream" x="132" y="296" height="14" rx="3">
+    <animate attributeName="width"
+             dur="8s" repeatCount="indefinite"
+             keyTimes="0; 0.0625; 0.5625; 0.975; 0.99; 1"
+             values="0; 0; 320; 320; 0; 0"/>
+  </rect>
+
+  <!-- tool A: 1 → 2.5 (mid-stream) -->
+  <text class="bar-label" x="56" y="329">tool A</text>
+  <rect class="tool-fast" x="212" y="318" height="11" rx="3">
+    <animate attributeName="width"
+             dur="8s" repeatCount="indefinite"
+             keyTimes="0; 0.1875; 0.375; 0.975; 0.99; 1"
+             values="0; 0; 120; 120; 0; 0"/>
+  </rect>
+
+  <!-- tool B: 2 → 3.5 (mid-stream) -->
+  <text class="bar-label" x="56" y="347">tool B</text>
+  <rect class="tool-fast" x="292" y="336" height="11" rx="3">
+    <animate attributeName="width"
+             dur="8s" repeatCount="indefinite"
+             keyTimes="0; 0.3125; 0.5; 0.975; 0.99; 1"
+             values="0; 0; 120; 120; 0; 0"/>
+  </rect>
+
+  <!-- tool C: 4 → 4.5 (sealed at end of stream — minor) -->
+  <text class="bar-label" x="56" y="365">tool C</text>
+  <rect class="tool-fast" x="452" y="354" height="11" rx="3">
+    <animate attributeName="width"
+             dur="8s" repeatCount="indefinite"
+             keyTimes="0; 0.5625; 0.625; 0.975; 0.99; 1"
+             values="0; 0; 40; 40; 0; 0"/>
+  </rect>
+
+  <!-- eager total marker -->
+  <text class="total total-eager" x="500" y="364" opacity="0">
+    Total: 4.5s  →  1.44× faster
+    <animate attributeName="opacity"
+             dur="8s" repeatCount="indefinite"
+             keyTimes="0; 0.625; 0.65; 0.975; 0.99; 1"
+             values="0; 0; 1; 1; 0; 0"/>
+  </text>
+
+  <!-- savings label -->
+  <text class="savings-label" x="510" y="304" opacity="0">
+    2.0s saved
+    <animate attributeName="opacity"
+             dur="8s" repeatCount="indefinite"
+             keyTimes="0; 0.875; 0.9; 0.975; 0.99; 1"
+             values="0; 0; 1; 1; 0; 0"/>
+  </text>
+
+  <!-- ============================ AXIS ============================ -->
+  <line class="axis" x1="132" y1="404" x2="772" y2="404"/>
+  <g class="tick">
+    <line x1="132" y1="404" x2="132" y2="410"/>
+    <line x1="212" y1="404" x2="212" y2="410"/>
+    <line x1="292" y1="404" x2="292" y2="410"/>
+    <line x1="372" y1="404" x2="372" y2="410"/>
+    <line x1="452" y1="404" x2="452" y2="410"/>
+    <line x1="532" y1="404" x2="532" y2="410"/>
+    <line x1="612" y1="404" x2="612" y2="410"/>
+    <line x1="692" y1="404" x2="692" y2="410"/>
+    <line x1="772" y1="404" x2="772" y2="410"/>
+  </g>
+  <g class="tick-label">
+    <text x="132" y="424" text-anchor="middle">0s</text>
+    <text x="212" y="424" text-anchor="middle">1s</text>
+    <text x="292" y="424" text-anchor="middle">2s</text>
+    <text x="372" y="424" text-anchor="middle">3s</text>
+    <text x="452" y="424" text-anchor="middle">4s</text>
+    <text x="532" y="424" text-anchor="middle">5s</text>
+    <text x="612" y="424" text-anchor="middle">6s</text>
+    <text x="692" y="424" text-anchor="middle">7s</text>
+    <text x="772" y="424" text-anchor="middle">8s</text>
+  </g>
+  <text class="sub" x="40" y="448">eager-tools · github.com/eager-tools/eager-tools</text>
+
+  <!-- ============================ PLAYHEAD ============================ -->
+  <line class="playhead" y1="92" y2="400">
+    <animate attributeName="x1"
+             dur="8s" repeatCount="indefinite"
+             keyTimes="0; 0.0625; 0.875; 0.95; 0.99; 1"
+             values="132; 132; 652; 652; 132; 132"/>
+    <animate attributeName="x2"
+             dur="8s" repeatCount="indefinite"
+             keyTimes="0; 0.0625; 0.875; 0.95; 0.99; 1"
+             values="132; 132; 652; 652; 132; 132"/>
+    <animate attributeName="opacity"
+             dur="8s" repeatCount="indefinite"
+             keyTimes="0; 0.06; 0.0625; 0.875; 0.94; 0.95; 1"
+             values="0; 0; 0.85; 0.85; 0.4; 0; 0"/>
+  </line>
+</svg>

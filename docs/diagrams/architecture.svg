@@ -1,0 +1,143 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 380" role="img"
+     aria-label="Architecture diagram showing how a provider stream flows through an adapter, into the SealDetector and ExecutorPool, and out to user code as a unified event and result stream.">
+  <title>eager-tools architecture — adapter → core → user</title>
+  <desc>Five-stage horizontal pipeline. A provider stream (Anthropic, OpenAI, OpenRouter, or LangGraph chunks) feeds an adapter that normalises chunks. Normalised chunks go into the SealDetector, which emits SealEvents the moment each tool block completes. The ExecutorPool consumes SealEvents and runs idempotent tools concurrently with the rest of the stream. The adapter merges sealed events and tool results into the public events() and results() async iterators that user code consumes.</desc>
+
+  <defs>
+    <style>
+      .bg { fill: #0f172a; }
+      .header { fill: #f1f5f9; font: 700 16px ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+      .sub { fill: #94a3b8; font: 12px ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+      .stage-title { fill: #f1f5f9; font: 700 13px ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+      .stage-sub { fill: #94a3b8; font: 11px ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+      .mono { fill: #cbd5e1; font: 11px ui-monospace, SFMono-Regular, Menlo, monospace; }
+      .accent { fill: #34d399; font: 600 11px ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+      .stage { fill: #111827; stroke: #1f2937; stroke-width: 1; }
+      .stage-provider { stroke: #38bdf8; }
+      .stage-adapter { stroke: #a78bfa; }
+      .stage-core { stroke: #22d3ee; }
+      .stage-pool { stroke: #34d399; }
+      .stage-user { stroke: #fbbf24; }
+      .arrow { stroke: #475569; stroke-width: 1.5; fill: none; }
+      .arrow-data { stroke: #22d3ee; stroke-width: 1.5; fill: none; }
+      .arrowhead { fill: #475569; }
+      .arrowhead-data { fill: #22d3ee; }
+      .pkg { fill: #1e293b; stroke: #334155; stroke-width: 1; }
+      .pkg-label { fill: #cbd5e1; font: 600 11px ui-monospace, SFMono-Regular, Menlo, monospace; }
+      .lane { fill: #1e293b; stroke: #334155; stroke-width: 1; stroke-dasharray: 4 4; }
+      .lane-label { fill: #64748b; font: 600 10px ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; letter-spacing: 0.08em; }
+    </style>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0,0 L10,5 L0,10 Z" class="arrowhead"/>
+    </marker>
+    <marker id="ah-data" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0,0 L10,5 L0,10 Z" class="arrowhead-data"/>
+    </marker>
+  </defs>
+
+  <rect class="bg" x="0" y="0" width="880" height="380"/>
+
+  <!-- header -->
+  <text class="header" x="32" y="30">Architecture</text>
+  <text class="sub" x="32" y="50">Provider-agnostic core wrapped by per-SDK adapters · async-only · no scheduler thread</text>
+
+  <!-- swim-lane labels -->
+  <rect class="lane" x="20" y="76" width="840" height="74" rx="4"/>
+  <text class="lane-label" x="32" y="92">CORE — packages/eager-tools-core/</text>
+
+  <rect class="lane" x="20" y="166" width="840" height="74" rx="4"/>
+  <text class="lane-label" x="32" y="182">ADAPTERS — packages/eager-tools-{anthropic,openai,langgraph}/</text>
+
+  <!-- ============================== STAGE BOXES (top lane = core) ============================== -->
+  <!-- SealDetector -->
+  <g transform="translate(298 100)">
+    <rect class="stage stage-core" x="0" y="0" width="180" height="44" rx="5"/>
+    <text class="stage-title" x="90" y="20" text-anchor="middle">SealDetector</text>
+    <text class="stage-sub" x="90" y="36" text-anchor="middle">chunk → SealEvent state machine</text>
+  </g>
+
+  <!-- ExecutorPool -->
+  <g transform="translate(508 100)">
+    <rect class="stage stage-pool" x="0" y="0" width="180" height="44" rx="5"/>
+    <text class="stage-title" x="90" y="20" text-anchor="middle">ExecutorPool</text>
+    <text class="stage-sub" x="90" y="36" text-anchor="middle">async pool · idempotency gate</text>
+  </g>
+
+  <!-- ============================== STAGE BOXES (bottom lane = adapters) ============================== -->
+  <!-- Provider stream -->
+  <g transform="translate(32 190)">
+    <rect class="stage stage-provider" x="0" y="0" width="156" height="44" rx="5"/>
+    <text class="stage-title" x="78" y="20" text-anchor="middle">Provider stream</text>
+    <text class="stage-sub" x="78" y="36" text-anchor="middle">SSE / chunk events</text>
+  </g>
+
+  <!-- Adapter -->
+  <g transform="translate(214 190)">
+    <rect class="stage stage-adapter" x="0" y="0" width="156" height="44" rx="5"/>
+    <text class="stage-title" x="78" y="20" text-anchor="middle">Adapter</text>
+    <text class="stage-sub" x="78" y="36" text-anchor="middle">normalize → chunks</text>
+  </g>
+
+  <!-- User code -->
+  <g transform="translate(704 190)">
+    <rect class="stage stage-user" x="0" y="0" width="156" height="44" rx="5"/>
+    <text class="stage-title" x="78" y="20" text-anchor="middle">User code</text>
+    <text class="stage-sub" x="78" y="36" text-anchor="middle">events() · results()</text>
+  </g>
+
+  <!-- ============================== ARROWS ============================== -->
+  <!-- Provider → Adapter -->
+  <path class="arrow-data" d="M 188 212 L 214 212" marker-end="url(#ah-data)"/>
+
+  <!-- Adapter → SealDetector (up + right) -->
+  <path class="arrow-data" d="M 370 198 C 388 198, 388 122, 298 122" marker-end="url(#ah-data)"/>
+
+  <!-- SealDetector → ExecutorPool -->
+  <path class="arrow-data" d="M 478 122 L 508 122" marker-end="url(#ah-data)"/>
+
+  <!-- ExecutorPool → Adapter (down + back) — but adapter merges, so arrow goes to Adapter merge node OR directly to user code -->
+  <!-- Show: ExecutorPool → User code (results) -->
+  <path class="arrow-data" d="M 688 122 C 720 122, 720 200, 704 210" marker-end="url(#ah-data)"/>
+
+  <!-- Adapter → User code (events passthrough) -->
+  <path class="arrow-data" d="M 370 222 L 704 222" marker-end="url(#ah-data)"/>
+
+  <!-- ============================== EDGE LABELS ============================== -->
+  <text class="mono" x="201" y="206">raw</text>
+  <text class="mono" x="396" y="160">NormalizedChunk</text>
+  <text class="mono" x="487" y="116">SealEvent</text>
+  <text class="mono" x="730" y="160">Result</text>
+  <text class="mono" x="514" y="216">events()</text>
+
+  <!-- ============================== PACKAGES STRIP ============================== -->
+  <text class="header" x="32" y="290" style="font-size:14px">Packages</text>
+
+  <g transform="translate(32 304)">
+    <rect class="pkg" x="0" y="0" width="200" height="56" rx="4"/>
+    <text class="pkg-label" x="14" y="22">eager-tools-core</text>
+    <text class="stage-sub" x="14" y="40">SealDetector · ExecutorPool</text>
+    <text class="accent" x="14" y="54">~300 LOC · zero deps</text>
+  </g>
+
+  <g transform="translate(244 304)">
+    <rect class="pkg" x="0" y="0" width="200" height="56" rx="4"/>
+    <text class="pkg-label" x="14" y="22">eager-tools-anthropic</text>
+    <text class="stage-sub" x="14" y="40">AnthropicEagerStream</text>
+    <text class="accent" x="14" y="54">v0.1 · alpha</text>
+  </g>
+
+  <g transform="translate(456 304)">
+    <rect class="pkg" x="0" y="0" width="200" height="56" rx="4"/>
+    <text class="pkg-label" x="14" y="22">eager-tools-openai</text>
+    <text class="stage-sub" x="14" y="40">OpenAIEagerStream · OpenRouter</text>
+    <text class="accent" x="14" y="54">v0.1 · alpha</text>
+  </g>
+
+  <g transform="translate(668 304)">
+    <rect class="pkg" x="0" y="0" width="200" height="56" rx="4"/>
+    <text class="pkg-label" x="14" y="22">eager-tools-langgraph</text>
+    <text class="stage-sub" x="14" y="40">EagerMiddleware</text>
+    <text class="accent" x="14" y="54">v0.2 · alpha</text>
+  </g>
+</svg>

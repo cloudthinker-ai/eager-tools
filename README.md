@@ -13,6 +13,13 @@
 
 ## The problem in one graph
 
+<p align="center">
+  <img src="./docs/diagrams/hero-eager-vs-parallel.svg" alt="Animated timeline: parallel finishes in 6.5s, eager finishes in 4.5s on the same workload" width="760"/>
+</p>
+
+<details>
+<summary>ASCII fallback</summary>
+
 ```
 Classic parallel tool calling:
 stream : [==================================]
@@ -26,6 +33,8 @@ tool B :       [=========]    ← fires mid-stream, overlaps A
 tool C :           [=========]← fires at message_stop
 total  : [==================================]               ← max(stream, max(tool))
 ```
+
+</details>
 
 Parallel tool calling overlaps tools with tools. **Eager tool calling overlaps tools with generation itself.**
 
@@ -130,8 +139,15 @@ eager-tools/
 └── .github/workflows/ci.yml
 ```
 
-Future packages (`eager-tools-langgraph`, `eager-tools-claude-agent`) live
-in the [Status](#status) table, not yet in-tree.
+Future packages (`eager-tools-claude-agent`) live in the [Status](#status)
+table, not yet in-tree.
+
+<p align="center">
+  <img src="./docs/diagrams/architecture.svg" alt="Architecture: provider stream → adapter → SealDetector → ExecutorPool → user code" width="760"/>
+</p>
+
+For the per-block mechanism (chunks → buffer → seal → dispatch), see
+[`docs/diagrams/seal-mechanism.svg`](./docs/diagrams/seal-mechanism.svg).
 
 ## When NOT to use it
 

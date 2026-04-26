@@ -1,0 +1,40 @@
+# Local pre-commit hooks. Install once with: `pre-commit install`
+# Run manually across the repo: `pre-commit run --all-files`
+#
+# Fast hooks run on every commit. Heavy checks (pyrefly, pytest) stay in CI
+# so the commit loop stays sub-second.
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-toml
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: ["--maxkb=512"]
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.8.4
+    hooks:
+      - id: ruff
+        name: ruff (lint)
+        args: ["--fix"]
+      - id: ruff-format
+        name: ruff (format)
+
+  # Pyrefly is in each package's dev extras (see pyproject.toml). Pre-commit
+  # runs it via uv against the core package only — adapter packages get
+  # full coverage in CI. Manual stage so it's opt-in:
+  #   pre-commit run --hook-stage manual pyrefly-core
+  - repo: local
+    hooks:
+      - id: pyrefly-core
+        name: pyrefly (eager-tools-core)
+        entry: bash -c 'cd packages/eager-tools-core && uv run pyrefly check'
+        language: system
+        pass_filenames: false
+        stages: [manual]
+        types: [python]

@@ -30,7 +30,7 @@ Decisions to lock BEFORE writing any code.
 - [x] `LICENSE`, `.gitignore`, `.python-version` — 2026-04-15
 - [x] `.github/workflows/ci.yml` — ruff + pytest + bench smoke — 2026-04-15
 - [x] `.github/ISSUE_TEMPLATE/config.yml` — disable issues, point to Discussions — 2026-04-15
-- [ ] Pre-commit hooks (ruff, pyrefly) — 1 hr
+- [x] Pre-commit hooks (ruff, pyrefly) — `.pre-commit-config.yaml` — 2026-04-26
 
 ### `eager-tools-core` (~300–400 src LOC)
 
@@ -72,10 +72,10 @@ Decisions to lock BEFORE writing any code.
 ### Docs
 
 - [x] `README.md` hero section + 60-second quickstart + benchmark headline — 2026-04-17 (rewritten with measured synthetic numbers, fixed broken import path)
-- [ ] Embed hero gif (split-screen classic vs eager) — 2 hr
+- [x] Embed hero gif (split-screen classic vs eager) — animated SVG `docs/diagrams/hero-eager-vs-parallel.svg`, embedded in README — 2026-04-26
 - [x] `docs/concept.md` — port from `cloud-cost-optimization/tasks/eager-tool-calling-explainer.md` — 2026-04-16
 - [x] `docs/when-not-to-use.md` — 2026-04-16
-- [ ] `docs/diagrams/*.svg` — whiteboard timeline diagrams (already drafted in landing-page blog) — 2 hr
+- [x] `docs/diagrams/*.svg` — whiteboard timeline diagrams: `hero-eager-vs-parallel.svg` (animated), `seal-mechanism.svg`, `architecture.svg` — 2026-04-26
 
 ---
 
@@ -198,6 +198,7 @@ Build BEFORE launch, watch monthly. — `ROADMAP §7.2`
 
 > Move completed items here with date + brief outcome.
 
+- [x] 2026-04-26 — **Pre-commit + diagrams batch** — landed `.pre-commit-config.yaml` with three repos: `pre-commit-hooks` (trailing-whitespace, end-of-file-fixer, check-yaml/toml, merge-conflict, large-file guard at 512KB), `astral-sh/ruff-pre-commit` (ruff lint with `--fix` + ruff format), and a local `pyrefly-core` hook running `uv run pyrefly check` against `packages/eager-tools-core/` — manual stage only (`pre-commit run --hook-stage manual pyrefly-core`) so per-commit loop stays sub-second; full pyrefly across all packages still runs in CI. Authored 3 SVG diagrams under `docs/diagrams/`: `hero-eager-vs-parallel.svg` (animated SMIL — 8s loop, two timelines, bars grow, playhead sweeps, totals fade in showing 6.5s vs 4.5s = 1.44× — embedded as the README hero with the prior ASCII art preserved as `<details>` fallback), `seal-mechanism.svg` (chunk lane → SealDetector buffer → SealEvent → ExecutorPool, static), `architecture.svg` (5-stage swim-lane: provider stream → adapter → SealDetector → ExecutorPool → user code, plus packages strip showing core / anthropic / openai / langgraph). Wired hero into README replacing the ASCII-only "problem in one graph" block, embedded architecture diagram below "Project layout", and corrected the stale "future packages" sentence to drop `eager-tools-langgraph` (it shipped in v0.2). All three SVGs validated as well-formed XML. Closes Phase 1 §"Repo scaffolding" pre-commit item and §"Docs" diagram items.
 - [x] 2026-04-17 — **`eager-tools-langgraph` v0.2 shipped** — scaffolded `packages/eager-tools-langgraph/` with `pyproject.toml` (pinned `langgraph>=1.1.6`, `langchain>=1.0`, `langchain-core>=1.2.14` for parallel `tool_call_chunks` merge fix #35281), `chunks.py` (~60 LOC `AIMessageChunk → list[NormalizedChunk]` normalizer, correlate by `index` not `id`), `middleware.py` (~210 LOC `EagerMiddleware(AgentMiddleware)` overriding `awrap_model_call` — owns `request.model.astream(...)`, feeds chunks through `SealDetector`, dispatches idempotent calls eagerly via `ExecutorPool`, drains results into `ModelResponse(result=[AIMessage, ToolMessage₁, …])`). Discovered + fixed `KeyError: 'model'` in `langchain.agents.factory:1514-1516`: the post-model branch only wires `model_destination` if some middleware overrides `after_model`, so EagerMiddleware adds a no-op `after_model` (documented inline). 7 replay tests (single tool, 3 parallel, mixed idempotent+not, unknown tool fallback, parallel-in-one-chunk, text-only, cancellation) + 1 `create_agent` smoke test (stub `BaseChatModel` yields scripted `AIMessageChunk`s, asserts ToolMessage commits without re-running tool node) — all green in 0.22s. `examples/06_langgraph_live.py` + `make example-6` target wired with `langchain-anthropic`. Package README documents version matrix + 5 honest limits (`create_agent` only, per-agent middleware, `add_messages` ordering, lost token visibility under `stream_mode="messages"`, provider chunk shape variance with upstream issue links). ROADMAP §3 v0.2 wave done.
 - [x] 2026-04-17 — **Bench workload expansion + cherry-pick** — grew `bench/harness.py` from 3 → 10 → 30 hardcoded scenarios (`d77b4e1`), then filtered to the 16 workloads where eager beats parallel by ≥1.20× (`dc9c307`); dropped the weak middle band (workloads where the slowest tool dwarfed the stream window or fired too late to overlap) to keep the headline honest. Final range: **1.20×–1.50× across 16 workloads, median ~1.28×**. Refreshed `README.md` headline table (`0189b12`) with three representative rows (3 / 9 / 15 tools) sourced directly from `bench/results.md`, plus a one-line range/median callout. Replaces the prior "3 workloads, 1.0–1.2×" snapshot from earlier today.
 - [x] 2026-04-17 — **Phase 1 polish batch** — landed `bench/` (synthetic harness with 3 workloads, three dispatch modes, p50 reporting, optional `--live` spot-check), `Makefile` targets `bench` / `bench-live-anthropic` / `bench-live-openai`, generated `bench/results.md` (1.0–1.2× over parallel, honestly conservative because synthetic removes network jitter). Rewrote `README.md` hero: measured numbers replace the unsourced 21× boast, broken `from eager_tools.adapters.anthropic import eager_stream` quickstart fixed to use `AnthropicEagerStream`, project layout updated (Makefile, docs/, bench/), Status table bumped from "soon" to "alpha". TODO.md cleanup of Phase 1 items that were already shipped (2026-04-15/16) but still showed `[ ]`.
