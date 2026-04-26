@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 360" role="img"
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 500" role="img"
      aria-label="Diagram of the seal mechanism: streaming chunks accumulate in a buffer until a block-complete chunk fires a SealEvent that dispatches the tool.">
   <title>Seal mechanism: chunk → buffer → seal → dispatch</title>
-  <desc>A horizontal flow showing a stream of provider chunks on the left (tool_use_start, three input_json_delta chunks carrying partial JSON, and a block_complete marker) feeding a SealDetector. The SealDetector accumulates the partial JSON until block_complete arrives, at which point it emits a SealEvent containing the full ToolCall. The SealEvent is consumed by an ExecutorPool that runs the tool concurrently with the rest of the model stream.</desc>
+  <desc>A top-to-bottom flow showing a stream of provider chunks (tool_use_start, three input_json_delta chunks carrying partial JSON, and a block_complete marker) feeding a SealDetector. The SealDetector accumulates the partial JSON until block_complete arrives, at which point it emits a SealEvent containing the full ToolCall. The SealEvent is consumed by an ExecutorPool that runs the tool concurrently with the rest of the model stream.</desc>
 
   <defs>
     <style>
@@ -16,14 +16,14 @@
       .chunk { fill: #1e293b; stroke: #334155; stroke-width: 1; }
       .chunk-start { stroke: #38bdf8; }
       .chunk-delta { stroke: #64748b; }
-      .chunk-seal { stroke: #34d399; }
+      .chunk-seal { stroke: #34d399; stroke-width: 1.5; }
       .seal-event { fill: #064e3b; stroke: #10b981; stroke-width: 1.5; }
-      .pool { fill: #1e293b; stroke: #22d3ee; stroke-width: 1.5; }
+      .pool { fill: #0c2a3b; stroke: #22d3ee; stroke-width: 1.5; }
       .arrow { stroke: #475569; stroke-width: 1.5; fill: none; }
       .arrow-fire { stroke: #10b981; stroke-width: 2; fill: none; }
       .arrowhead { fill: #475569; }
       .arrowhead-fire { fill: #10b981; }
-      .accent { fill: #34d399; font: 600 12px ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+      .accent { fill: #34d399; font: 600 11px ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
     </style>
     <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
       <path d="M0,0 L10,5 L0,10 Z" class="arrowhead"/>
@@ -33,84 +33,75 @@
     </marker>
   </defs>
 
-  <rect class="bg" x="0" y="0" width="820" height="360"/>
+  <rect class="bg" x="0" y="0" width="820" height="500"/>
 
   <!-- header -->
   <text class="header" x="32" y="32">How a tool block seals</text>
   <text class="sub" x="32" y="52">Provider chunks accumulate until block_complete · seal event triggers eager dispatch</text>
 
-  <!-- ===================== chunk lane ===================== -->
+  <!-- ===================== STAGE 1: provider stream ===================== -->
   <text class="label" x="32" y="92">1 · provider stream</text>
 
-  <!-- chunk: tool_use_start -->
-  <g transform="translate(32 102)">
+  <!-- 5 chunks centered: width 120, gap 16, total 664, margin (820-664)/2 = 78 -->
+  <g transform="translate(78 102)">
     <rect class="chunk chunk-start" x="0" y="0" width="120" height="48" rx="4"/>
-    <text class="mono" x="60" y="18" text-anchor="middle">tool_use_start</text>
-    <text class="mono-dim" x="60" y="34" text-anchor="middle">id=tu_01</text>
+    <text class="mono" x="60" y="20" text-anchor="middle">tool_use_start</text>
+    <text class="mono-dim" x="60" y="36" text-anchor="middle">id=tu_01</text>
   </g>
-
-  <!-- delta 1 -->
-  <g transform="translate(168 102)">
+  <g transform="translate(214 102)">
     <rect class="chunk chunk-delta" x="0" y="0" width="120" height="48" rx="4"/>
-    <text class="mono" x="60" y="18" text-anchor="middle">input_json_delta</text>
-    <text class="mono-dim" x="60" y="34" text-anchor="middle">{"path":"/etc</text>
+    <text class="mono" x="60" y="20" text-anchor="middle">input_json_delta</text>
+    <text class="mono-dim" x="60" y="36" text-anchor="middle">{"path":"/etc</text>
   </g>
-
-  <!-- delta 2 -->
-  <g transform="translate(304 102)">
+  <g transform="translate(350 102)">
     <rect class="chunk chunk-delta" x="0" y="0" width="120" height="48" rx="4"/>
-    <text class="mono" x="60" y="18" text-anchor="middle">input_json_delta</text>
-    <text class="mono-dim" x="60" y="34" text-anchor="middle">/hosts","mode":</text>
+    <text class="mono" x="60" y="20" text-anchor="middle">input_json_delta</text>
+    <text class="mono-dim" x="60" y="36" text-anchor="middle">/hosts","mode":</text>
   </g>
-
-  <!-- delta 3 -->
-  <g transform="translate(440 102)">
+  <g transform="translate(486 102)">
     <rect class="chunk chunk-delta" x="0" y="0" width="120" height="48" rx="4"/>
-    <text class="mono" x="60" y="18" text-anchor="middle">input_json_delta</text>
-    <text class="mono-dim" x="60" y="34" text-anchor="middle">"r"}</text>
+    <text class="mono" x="60" y="20" text-anchor="middle">input_json_delta</text>
+    <text class="mono-dim" x="60" y="36" text-anchor="middle">"r"}</text>
   </g>
-
-  <!-- block_complete -->
-  <g transform="translate(576 102)">
+  <g transform="translate(622 102)">
     <rect class="chunk chunk-seal" x="0" y="0" width="120" height="48" rx="4"/>
-    <text class="mono" x="60" y="18" text-anchor="middle">block_complete</text>
-    <text class="accent" x="60" y="34" text-anchor="middle">— SEAL —</text>
+    <text class="mono" x="60" y="20" text-anchor="middle">block_complete</text>
+    <text class="accent" x="60" y="36" text-anchor="middle">— SEAL —</text>
   </g>
 
-  <!-- chunk-to-detector arrow -->
-  <path class="arrow" d="M 410 168 L 410 196" marker-end="url(#ah)"/>
+  <!-- arrow: chunks → SealDetector -->
+  <path class="arrow" d="M 410 158 L 410 196" marker-end="url(#ah)"/>
 
-  <!-- ===================== SealDetector ===================== -->
+  <!-- ===================== STAGE 2: SealDetector ===================== -->
   <text class="label" x="32" y="220">2 · SealDetector buffers per-block, emits on completion</text>
   <g transform="translate(32 232)">
-    <rect class="panel" x="0" y="0" width="540" height="96" rx="6"/>
-    <text class="label" x="20" y="24">SealDetector</text>
-    <text class="sub" x="20" y="42">id → _ToolBuffer { name, json_fragments[] }</text>
-
-    <!-- inner buffer view -->
-    <rect class="chunk chunk-delta" x="20" y="56" width="500" height="28" rx="3"/>
-    <text class="mono" x="32" y="74">tu_01 → "read_file" · {"path":"/etc/hosts","mode":"r"}</text>
+    <rect class="panel" x="0" y="0" width="756" height="104" rx="6"/>
+    <text class="label" x="20" y="26">SealDetector</text>
+    <text class="sub" x="20" y="44">id → _ToolBuffer { name, json_fragments[] }</text>
+    <rect class="chunk chunk-delta" x="20" y="60" width="716" height="32" rx="3"/>
+    <text class="mono" x="32" y="80">tu_01 → "read_file" · {"path":"/etc/hosts","mode":"r"}</text>
   </g>
 
-  <!-- detector → seal event arrow (the "fire") -->
-  <path class="arrow-fire" d="M 572 280 L 632 280" marker-end="url(#ah-fire)"/>
+  <!-- arrow-fire: SealDetector → SealEvent -->
+  <path class="arrow-fire" d="M 410 346 L 410 394" marker-end="url(#ah-fire)"/>
 
-  <!-- ===================== Seal event + pool ===================== -->
-  <g transform="translate(636 232)">
-    <rect class="seal-event" x="0" y="0" width="152" height="96" rx="6"/>
-    <text class="label" x="76" y="24" text-anchor="middle">SealEvent</text>
-    <text class="mono" x="76" y="46" text-anchor="middle">ToolCall(</text>
-    <text class="mono" x="76" y="62" text-anchor="middle">id="tu_01",</text>
-    <text class="mono" x="76" y="78" text-anchor="middle">name="read_file"</text>
+  <!-- ===================== STAGE 3: SealEvent → ExecutorPool ===================== -->
+  <!-- SealEvent (left) -->
+  <g transform="translate(110 400)">
+    <rect class="seal-event" x="0" y="0" width="280" height="76" rx="6"/>
+    <text class="label" x="140" y="24" text-anchor="middle">SealEvent</text>
+    <text class="mono" x="140" y="46" text-anchor="middle">ToolCall(id="tu_01",</text>
+    <text class="mono" x="140" y="64" text-anchor="middle">name="read_file", input={...})</text>
   </g>
 
-  <!-- pool (below seal event) -->
-  <g transform="translate(636 102)">
-    <rect class="pool" x="0" y="0" width="152" height="48" rx="6"/>
-    <text class="label" x="76" y="20" text-anchor="middle">ExecutorPool</text>
-    <text class="sub" x="76" y="38" text-anchor="middle">dispatches concurrently</text>
-  </g>
+  <!-- arrow: SealEvent → ExecutorPool -->
+  <path class="arrow-fire" d="M 390 438 L 430 438" marker-end="url(#ah-fire)"/>
 
-  <!-- arrow seal-event → pool (curved up) -->
-  <path class="arrow-fire" d="M 712 232 C 712 192, 712 172, 712 152" marker-end="url(#ah-fire)"/>
+  <!-- ExecutorPool (right) -->
+  <g transform="translate(430 400)">
+    <rect class="pool" x="0" y="0" width="280" height="76" rx="6"/>
+    <text class="label" x="140" y="24" text-anchor="middle">ExecutorPool</text>
+    <text class="sub" x="140" y="46" text-anchor="middle">async pool · idempotency gate</text>
+    <text class="accent" x="140" y="64" text-anchor="middle">dispatches concurrently with stream</text>
+  </g>
 </svg>
