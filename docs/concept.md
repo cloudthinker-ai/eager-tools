@@ -12,10 +12,10 @@ see [`METHOD.md`](../METHOD.md).
 
 ## The three eras
 
-| Era | Concurrency | When tools start | Wall clock |
-|-----|-------------|------------------|------------|
-| Sequential | none | after each prior tool | `Σ(stream + all tools)` |
-| Parallel   | tools with tools | after `message_stop` | `stream + max(tool)` |
+| Era        | Concurrency                                    | When tools start                   | Wall clock                   |
+| ------------| ------------------------------------------------| ------------------------------------| ------------------------------|
+| Sequential | none                                           | after each prior tool              | `Σ(stream + all tools)`      |
+| Parallel   | tools with tools                               | after `message_stop`               | `stream + max(tool)`         |
 | **Eager**  | tools with tools **and** tools with generation | the instant each tool's block ends | **`max(stream, max(tool))`** |
 
 Sequential → parallel collapses one dimension of latency. Parallel → eager
