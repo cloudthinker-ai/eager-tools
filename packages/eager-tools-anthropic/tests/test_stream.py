@@ -12,7 +12,7 @@ import contextlib
 from collections.abc import AsyncIterator
 from typing import Any
 
-from eager_tools import Tool, ToolCall
+from eager_tools import SealEvent, Tool, ToolCall
 from fixtures import (
     content_block_stop,
     input_json_delta,
@@ -210,6 +210,87 @@ async def test_dispatch_unknown_tool_surfaces_in_results() -> None:
     call, exc = results[0]
     assert call.name == "missing"
     assert isinstance(exc, KeyError)
+
+
+async def test_observability_on_seal_fires_for_every_seal() -> None:
+    """`on_seal` fires once per tool_sealed plus once for message_complete."""
+
+    class Counter:
+        def __init__(self) -> None:
+            self.seals: list[SealEvent] = []
+            self.dispatch_starts: int = 0
+            self.dispatch_ends: list[Exception | None] = []
+
+        def on_seal(self, event: SealEvent) -> None:
+            self.seals.append(event)
+
+        def on_dispatch_start(self, call: ToolCall) -> None:
+            del call
+            self.dispatch_starts += 1
+
+        def on_dispatch_end(self, call: ToolCall, error: Exception | None) -> None:
+            del call
+            self.dispatch_ends.append(error)
+
+    raw = [
+        tool_use_start(0, "A", "read_file"),
+        input_json_delta(0, '{"path":"/a"}'),
+        content_block_stop(0),
+        tool_use_start(1, "B", "http_get"),
+        input_json_delta(1, '{"url":"/b"}'),
+        content_block_stop(1),
+        message_stop(),
+    ]
+    tools: dict[str, Tool] = {
+        "read_file": FakeTool("read_file"),
+        "http_get": FakeTool("http_get"),
+    }
+    observer = Counter()
+    stream = AnthropicEagerStream(_async_iter(raw), tools=tools, observability=observer)
+    _ = [ev async for ev in stream.events()]
+    _ = [item async for item in stream.results()]
+
+    # 2 tool_sealed + 1 message_complete
+    assert len(observer.seals) == 3
+    kinds = [s.kind for s in observer.seals]
+    assert kinds == ["tool_sealed", "tool_sealed", "message_complete"]
+    for seal in observer.seals[:2]:
+        assert seal.seal_latency_ms is not None
+        assert seal.seal_latency_ms >= 0.0
+    assert observer.dispatch_starts == 2
+    assert observer.dispatch_ends == [None, None]
+
+
+async def test_observer_on_seal_exception_does_not_break_stream() -> None:
+    """A broken observer must not abort the stream — adapter wraps `on_seal`
+    in `contextlib.suppress(Exception)` to match `ExecutorPool._safe_hook`.
+    """
+
+    class BrokenObserver:
+        def on_seal(self, event: SealEvent) -> None:
+            del event
+            raise RuntimeError("observer broken")
+
+        def on_dispatch_start(self, call: ToolCall) -> None:
+            del call
+
+        def on_dispatch_end(self, call: ToolCall, error: Exception | None) -> None:
+            del call, error
+
+    raw = [
+        tool_use_start(0, "A", "read_file"),
+        input_json_delta(0, '{"path":"/a"}'),
+        content_block_stop(0),
+        message_stop(),
+    ]
+    tools: dict[str, Tool] = {"read_file": FakeTool("read_file")}
+    stream = AnthropicEagerStream(_async_iter(raw), tools=tools, observability=BrokenObserver())
+
+    seals = [ev async for ev in stream.events()]
+    assert any(s.kind == "tool_sealed" for s in seals)
+    assert seals[-1].kind == "message_complete"
+    results = {call.tool_call_id: res async for call, res in stream.results()}
+    assert results == {"A": {"name": "read_file", "args": {"path": "/a"}}}
 
 
 async def test_malformed_json_does_not_crash_stream_and_surfaces_in_results() -> None:

@@ -10,6 +10,7 @@ See METHOD.md §4 for the full runtime contract.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 from collections.abc import AsyncIterator
 from typing import Any
 
@@ -52,6 +53,7 @@ class OpenAIEagerStream:
         conversation_id: str | None = None,
     ) -> None:
         self._source = source
+        self._observability = observability
         self._detector = SealDetector(conversation_id=conversation_id)
         self._pool = ExecutorPool(
             tools,
@@ -78,14 +80,18 @@ class OpenAIEagerStream:
                     )
                     if seal is not None and seal.tool_call is not None:
                         await self._handle_seal(seal)
+                        self._fire_on_seal(seal)
                         yield seal
 
                 if _stream_ended(chunk):
                     final = self._detector.finalize()
                     if final is not None and final.tool_call is not None:
                         await self._handle_seal(final)
+                        self._fire_on_seal(final)
                         yield final
-                    yield SealEvent(kind="message_complete")
+                    msg_complete = SealEvent(kind="message_complete")
+                    self._fire_on_seal(msg_complete)
+                    yield msg_complete
                     await self._pool.close()
                     return
 
@@ -93,13 +99,25 @@ class OpenAIEagerStream:
             final = self._detector.finalize()
             if final is not None and final.tool_call is not None:
                 await self._handle_seal(final)
+                self._fire_on_seal(final)
                 yield final
-            yield SealEvent(kind="message_complete")
+            msg_complete = SealEvent(kind="message_complete")
+            self._fire_on_seal(msg_complete)
+            yield msg_complete
             await self._pool.close()
         except (asyncio.CancelledError, GeneratorExit):
             await self._pool.cancel_all()
             await self._pool.close()
             raise
+
+    def _fire_on_seal(self, seal: SealEvent) -> None:
+        """Notify the observability hook (sync — `ObservabilityHook.on_seal`
+        is `def`, not `async def`). Suppresses observer errors so a broken
+        hook can never abort the stream — same semantics as
+        `ExecutorPool._safe_hook`.
+        """
+        with contextlib.suppress(Exception):
+            self._observability.on_seal(seal)
 
     async def _handle_seal(self, seal: SealEvent) -> None:
         """Dispatch a sealed tool, or push the parse_error onto results without dispatching.

@@ -167,7 +167,10 @@ Long version with edge cases: [`docs/when-not-to-use.md`](./docs/when-not-to-use
 | v0.2 | alpha — LangGraph adapter shipped | `eager-tools-langgraph` — `EagerMiddleware` for `langchain.agents.create_agent`, provider-agnostic via LangChain's `tool_call_chunks` |
 | v0.3 | planned | Claude Agent SDK hook |
 
-Follow progress in [`TODO.md`](./TODO.md).
+Follow progress in [`TODO.md`](./TODO.md). Behavior changes between versions
+land in [`CHANGELOG.md`](./CHANGELOG.md) — read it before bumping
+`eager-tools-core`, especially if you've implemented a custom
+`ObservabilityHook`.
 
 ## Contributing
 

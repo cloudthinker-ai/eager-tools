@@ -15,6 +15,7 @@ from __future__ import annotations
 
 from .core import SealDetector
 from .executor import ExecutorPool, NonIdempotentToolError
+from .observability import OTelObservability
 from .types import (
     NOOP_OBSERVABILITY,
     ObservabilityHook,
@@ -24,12 +25,13 @@ from .types import (
     ToolCall,
 )
 
-__version__ = "0.0.1"
+__version__ = "0.1.0"
 
 __all__ = [
     "NOOP_OBSERVABILITY",
     "ExecutorPool",
     "NonIdempotentToolError",
+    "OTelObservability",
     "ObservabilityHook",
     "SealDetector",
     "SealEvent",

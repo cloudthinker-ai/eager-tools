@@ -13,6 +13,7 @@ import json
 from typing import Any
 
 import pytest
+from eager_tools import SealEvent, ToolCall
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
 from eager_tools_langgraph import EagerMiddleware
@@ -170,6 +171,85 @@ async def test_parallel_chunk_in_single_message() -> None:
     ai_msg = response.result[0]
     assert isinstance(ai_msg, AIMessage)
     assert {tc["id"] for tc in ai_msg.tool_calls} == {"call_a", "call_b"}
+
+
+@pytest.mark.asyncio
+async def test_observability_on_seal_fires_for_each_sealed_tool() -> None:
+    """Observer's `on_seal` fires once per sealed tool. Middleware emits no
+    `message_complete` SealEvent (returns ModelResponse instead)."""
+
+    class Counter:
+        def __init__(self) -> None:
+            self.seals: list[SealEvent] = []
+            self.dispatch_starts: int = 0
+            self.dispatch_ends: list[Exception | None] = []
+
+        def on_seal(self, event: SealEvent) -> None:
+            self.seals.append(event)
+
+        def on_dispatch_start(self, call: ToolCall) -> None:
+            del call
+            self.dispatch_starts += 1
+
+        def on_dispatch_end(self, call: ToolCall, error: Exception | None) -> None:
+            del call
+            self.dispatch_ends.append(error)
+
+    observer = Counter()
+    a = _RecordingTool("a", payload="A")
+    b = _RecordingTool("b", payload="B")
+    mw = EagerMiddleware({"a": a, "b": b}, observability=observer)
+    model = script(
+        tool_chunk(index=0, tool_id="call_a", name="a", args="{}"),
+        tool_chunk(index=1, tool_id="call_b", name="b", args="{}"),
+    )
+
+    await _run(mw, model)
+
+    assert len(observer.seals) == 2
+    assert all(s.kind == "tool_sealed" for s in observer.seals)
+    assert {s.tool_call.tool_call_id for s in observer.seals if s.tool_call} == {
+        "call_a",
+        "call_b",
+    }
+    for seal in observer.seals:
+        assert seal.seal_latency_ms is not None
+        assert seal.seal_latency_ms >= 0.0
+    assert observer.dispatch_starts == 2
+    assert observer.dispatch_ends == [None, None]
+
+
+@pytest.mark.asyncio
+async def test_observer_on_seal_exception_does_not_break_middleware() -> None:
+    """A broken observer must not abort the model step — middleware wraps
+    `on_seal` in `contextlib.suppress(Exception)` inside `_handle_seal`.
+    """
+
+    class BrokenObserver:
+        def on_seal(self, event: SealEvent) -> None:
+            del event
+            raise RuntimeError("observer broken")
+
+        def on_dispatch_start(self, call: ToolCall) -> None:
+            del call
+
+        def on_dispatch_end(self, call: ToolCall, error: Exception | None) -> None:
+            del call, error
+
+    tool = _RecordingTool("read_file", payload={"text": "hello"})
+    mw = EagerMiddleware({"read_file": tool}, observability=BrokenObserver())
+    model = script(
+        tool_chunk(index=0, tool_id="call_1", name="read_file", args='{"path":"a.txt"}'),
+    )
+
+    response = await _run(mw, model)
+
+    assert tool.calls == [{"path": "a.txt"}]
+    assert len(response.result) == 2
+    ai_msg, tool_msg = response.result
+    assert isinstance(ai_msg, AIMessage)
+    assert isinstance(tool_msg, ToolMessage)
+    assert tool_msg.tool_call_id == "call_1"
 
 
 @pytest.mark.asyncio

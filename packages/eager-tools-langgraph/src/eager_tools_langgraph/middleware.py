@@ -169,6 +169,11 @@ class EagerMiddleware(AgentMiddleware[Any, Any]):
         already-malformed call.
         """
         assert seal.tool_call is not None
+        # Sync call — `ObservabilityHook.on_seal` is `def`, not `async def`.
+        # Suppress observer errors to match `ExecutorPool._safe_hook` semantics:
+        # a broken hook must never abort the stream.
+        with contextlib.suppress(Exception):
+            self._observability.on_seal(seal)
         if seal.parse_error is not None:
             await pool.record_error(seal.tool_call, seal.parse_error)
             eager_ids.add(seal.tool_call.tool_call_id)
