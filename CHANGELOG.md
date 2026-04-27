@@ -3,6 +3,76 @@
 All notable changes to this repo are tracked here. Per-package versions move
 in lockstep with the relevant package release.
 
+## 0.3.0 — gate reasons + denial observability + OTel cancel-leak fix
+
+Releases `eager-tools-core`, `eager-tools-anthropic`, `eager-tools-openai`,
+and `eager-tools-langgraph` together at 0.3.0.
+
+### Added
+
+- **Gate can return `bool | str`.** Returning a string denies eager dispatch
+  and uses that string as the denial reason. The string is exposed on
+  `GateDeniedError.reason`, becomes the exception message verbatim, and
+  flows through `on_dispatch_denied` — adapters that surface the denial
+  back to the model now send the gate's own explanation instead of a
+  wrapper. `GateFn` alias updated to `Callable[[ToolCall], Awaitable[bool | str]]`.
+  Empty string `""` is still a denial (the type, not truthiness, decides).
+- **`ObservabilityHook.on_dispatch_denied(call, reason: str)`** — fired
+  immediately before each `EagerDispatchDeniedError` is raised. Four
+  denial paths, each with its own `reason`:
+  - `"non-idempotent tool"`              — `tool.idempotent is False`
+  - the gate's `str` verbatim (incl. `""`) — gate returned a string
+  - `"gate denied <name>"`               — gate returned `False`
+  - `"gate raised <Type>: <msg>"`        — gate raised an exception
+
+  Unpaired with `on_dispatch_start` / `on_dispatch_end` — the tool never
+  reached the executor. `OTelObservability` emits a synchronous
+  `eager_tools.dispatch_denied` span with `eager.tool.id`, `eager.tool.name`,
+  `eager.denial.reason`.
+- **`reason: str` attribute on `EagerDispatchDeniedError`** (and both
+  subclasses). Adapters can `exc.reason` instead of parsing `str(exc)`.
+
+### Fixed
+
+- **OTel dispatch span no longer leaks on cancel-while-queued.**
+  Pre-0.3.0, tool tasks cancelled while waiting on the pool's semaphore
+  never reached `on_dispatch_end`, leaving the corresponding
+  `eager_tools.dispatch` span unclosed (bounded but real — known
+  limitation #2 in `observability.py`). `_run_one` now uses a single
+  `try/finally`, so `on_dispatch_end` fires on every exit path. The
+  limitation note has been dropped from `observability.py`. Pinned by
+  `test_dispatch_end_fires_on_cancel_while_queued`.
+
+### Changed (potentially breaking for custom `ObservabilityHook` impls)
+
+- **`ObservabilityHook` Protocol now declares `on_dispatch_denied`.** Custom
+  impls written against the 0.2.x Protocol will:
+  - Continue to work at runtime — the executor wraps every hook call in
+    `contextlib.suppress(Exception)`, which catches the `AttributeError`
+    when the method is missing. The denial events are silently dropped.
+  - Fail `isinstance(x, ObservabilityHook)` because the Protocol is
+    `runtime_checkable`. Add a no-op `def on_dispatch_denied(self, call, reason): pass`
+    to restore conformance.
+
+  Same migration shape as the v0.1 `on_seal` Protocol expansion.
+
+- **`EagerDispatchDeniedError` constructor now requires `reason: str` keyword.**
+  Custom adapters that subclassed or instantiated `NonIdempotentToolError` /
+  `GateDeniedError` directly need to add `reason="..."`. The bundled
+  adapters do not — they only catch the exceptions, never construct them.
+
+### Notes
+
+- The `bool | str` change is fully additive at the gate-return-type level —
+  existing `True`/`False` gates work unchanged. The new `str` path is
+  opt-in.
+- `on_dispatch_denied` fires from the executor (not the adapter), so it's
+  consistent across Anthropic / OpenAI / LangGraph regardless of how each
+  adapter routes the denial downstream.
+- Limitation note dropped: parse-error seals still emit a `seal` span
+  without a paired `dispatch` span (limitation #1, intentional). That
+  remains.
+
 ## 0.2.0 — per-call gate (HITL primitive)
 
 Releases `eager-tools-core`, `eager-tools-anthropic`, `eager-tools-openai`,

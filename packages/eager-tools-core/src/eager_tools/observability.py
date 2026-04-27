@@ -8,18 +8,25 @@ zero-dep promise.
 
 Span schema
 -----------
-Two long-lived span types per (idempotent, parseable) tool call:
+Three span types — the dispatch span is long-lived, the others sync.
 
-    eager_tools.seal       — opens-and-closes synchronously when a tool block
-                             seals (or the message ends). Carries
-                             `eager.seal.kind`, `eager.seal.latency_ms`,
-                             `eager.tool.id`, `eager.tool.name`. On parse_error
-                             seals: `eager.parse_error` + `record_exception`.
+    eager_tools.seal           — sync. Tool block seals (or message ends).
+                                 Carries `eager.seal.kind`,
+                                 `eager.seal.latency_ms`, `eager.tool.id`,
+                                 `eager.tool.name`. On parse_error seals:
+                                 `eager.parse_error` + `record_exception`.
 
-    eager_tools.dispatch   — opened on `on_dispatch_start`, closed on
-                             `on_dispatch_end`. Carries `eager.tool.id`,
-                             `eager.tool.name`. On error: `record_exception` +
-                             `eager.error.type`.
+    eager_tools.dispatch       — opened on `on_dispatch_start`, closed on
+                                 `on_dispatch_end`. Carries `eager.tool.id`,
+                                 `eager.tool.name`. On error:
+                                 `record_exception` + `eager.error.type`.
+
+    eager_tools.dispatch_denied — sync. Sealed tool denied eager dispatch
+                                  (non-idempotent / gate False / gate str /
+                                  gate raised). Carries `eager.tool.id`,
+                                  `eager.tool.name`, `eager.denial.reason`.
+                                  No paired dispatch span — the tool never
+                                  reached the executor.
 
 Attribute namespace `eager.*` avoids collision with upstream provider
 instrumentations (Anthropic, OpenAI, LangChain SDKs).
@@ -30,13 +37,7 @@ Known limitations
    and never executed — `ExecutorPool.record_error` bypasses dispatch hooks
    entirely. This truthfully reflects "seen but not run" in dashboards.
 
-2. Dispatch span leaks on cancellation while queued. Tool tasks cancelled
-   *while waiting on the pool's semaphore* never reach `on_dispatch_end`,
-   leaving the dispatch span unclosed for the lifetime of the
-   `OTelObservability` instance. Bounded constant (≤ N pending tools per
-   cancelled stream); not a runaway leak. Will revisit if real users hit it.
-
-3. `on_seal` for `kind="message_complete"` fires a span with only the kind
+2. `on_seal` for `kind="message_complete"` fires a span with only the kind
    attribute set — symmetry with sealed-tool spans is more useful for
    dashboards than terseness.
 
@@ -118,6 +119,12 @@ class OTelObservability:
             span.set_attribute("eager.error.type", type(error).__name__)
             span.record_exception(error)
         span.end()
+
+    def on_dispatch_denied(self, call: ToolCall, reason: str) -> None:
+        with self._tracer.start_as_current_span("eager_tools.dispatch_denied") as span:
+            span.set_attribute("eager.tool.id", call.tool_call_id)
+            span.set_attribute("eager.tool.name", call.name)
+            span.set_attribute("eager.denial.reason", reason)
 
 
 __all__ = ["OTelObservability"]

@@ -13,7 +13,10 @@ subclasses of `EagerDispatchDeniedError`:
 
 Adapters catch `EagerDispatchDeniedError` and choose how to surface it (record_error,
 silent fall-through to the framework's tool step, etc.). The pool itself never
-records on a denied dispatch.
+records on a denied dispatch — but it *does* fire
+`ObservabilityHook.on_dispatch_denied(call, reason)` immediately before each
+denial raise, so traces / counters can stay accurate without the adapter
+needing to know.
 
 See METHOD.md §4 for the full runtime contract.
 """
@@ -34,7 +37,18 @@ class EagerDispatchDeniedError(RuntimeError):
     Adapters catch this to route the call elsewhere — record an error,
     fall through to the framework's tool step, etc. The original cause (if
     any) is chained on `__cause__`.
+
+    The `reason` attribute is a short human-readable string. It is the same
+    string passed to `ObservabilityHook.on_dispatch_denied`. Adapters and
+    consumer code may surface it back to the model as the tool error
+    message.
     """
+
+    reason: str
+
+    def __init__(self, message: str, *, reason: str) -> None:
+        super().__init__(message)
+        self.reason = reason
 
 
 class NonIdempotentToolError(EagerDispatchDeniedError):
@@ -50,10 +64,15 @@ class NonIdempotentToolError(EagerDispatchDeniedError):
 class GateDeniedError(EagerDispatchDeniedError):
     """Raised when a tool's per-call `gate(call)` denies eager dispatch.
 
-    Either `gate` returned False (denial) or `gate` raised (treated as denial,
-    with the original exception chained on `__cause__`). Sibling — not
-    subclass — of `NonIdempotentToolError`: gate denial is a per-call,
-    args-aware decision; idempotency is a per-tool blanket policy.
+    Sources of denial (each populates `reason`):
+
+    - gate returned `False`    → `reason="gate denied <name>"`
+    - gate returned `str`      → `reason=<that str>` (any string, including "")
+    - gate raised an exception → `reason="gate raised <Type>: <msg>"`,
+                                 original exception chained on `__cause__`
+
+    Sibling — not subclass — of `NonIdempotentToolError`: gate denial is a
+    per-call, args-aware decision; idempotency is a per-tool blanket policy.
     """
 
 
@@ -113,22 +132,38 @@ class ExecutorPool:
             await self._results.put((call, KeyError(f"Unknown tool: {call.name}")))
             return
         if not tool.idempotent:
+            reason = "non-idempotent tool"
+            self._safe_hook("on_dispatch_denied", call, reason)
             raise NonIdempotentToolError(
-                f"Tool {call.name!r} is not idempotent; eager dispatch forbidden."
+                f"Tool {call.name!r} is not idempotent; eager dispatch forbidden.",
+                reason=reason,
             )
         gate = getattr(tool, "gate", None)
         if gate is not None:
             try:
-                allowed = await gate(call)
+                verdict = await gate(call)
             except asyncio.CancelledError:
                 raise
             except Exception as exc:
+                reason = f"gate raised {type(exc).__name__}: {exc}"
+                self._safe_hook("on_dispatch_denied", call, reason)
                 raise GateDeniedError(
-                    f"Gate for {call.name!r} raised; eager dispatch denied."
+                    f"Gate for {call.name!r} raised; eager dispatch denied.",
+                    reason=reason,
                 ) from exc
-            if not allowed:
+            # Type-check before truthiness: empty string `""` must be a denial,
+            # not an allow. `True`/`False` are not `str` so they bypass this.
+            if isinstance(verdict, str):
+                reason = verdict
+                msg = verdict if verdict else f"Gate for {call.name!r} denied eager dispatch."
+                self._safe_hook("on_dispatch_denied", call, reason)
+                raise GateDeniedError(msg, reason=reason)
+            if not verdict:
+                reason = f"gate denied {call.name!r}"
+                self._safe_hook("on_dispatch_denied", call, reason)
                 raise GateDeniedError(
-                    f"Gate for {call.name!r} returned False; eager dispatch denied."
+                    f"Gate for {call.name!r} returned False; eager dispatch denied.",
+                    reason=reason,
                 )
         self._safe_hook("on_dispatch_start", call)
         task = asyncio.create_task(self._run_one(call, tool), name=f"eager-{call.tool_call_id}")
@@ -136,17 +171,23 @@ class ExecutorPool:
         task.add_done_callback(self._in_flight.discard)
 
     async def _run_one(self, call: ToolCall, tool: Tool) -> None:
-        async with self._sem:
-            try:
-                result = await tool(call.arguments)
-                await self._results.put((call, result))
-                self._safe_hook("on_dispatch_end", call, None)
-            except asyncio.CancelledError:
-                self._safe_hook("on_dispatch_end", call, None)
-                raise
-            except Exception as exc:
-                await self._results.put((call, exc))
-                self._safe_hook("on_dispatch_end", call, exc)
+        # Single try/finally so `on_dispatch_end` fires on every exit path,
+        # including cancellation while waiting on the semaphore. Without
+        # this, OTel dispatch spans would leak for tools cancelled before
+        # their turn at the semaphore (bounded but unwanted).
+        error: Exception | None = None
+        try:
+            async with self._sem:
+                try:
+                    result = await tool(call.arguments)
+                    await self._results.put((call, result))
+                except asyncio.CancelledError:
+                    raise
+                except Exception as exc:
+                    error = exc
+                    await self._results.put((call, exc))
+        finally:
+            self._safe_hook("on_dispatch_end", call, error)
 
     async def results(self) -> AsyncIterator[tuple[ToolCall, Any | Exception]]:
         """Async iterator over completed tool results, in completion order.

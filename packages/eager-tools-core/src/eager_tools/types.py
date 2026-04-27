@@ -16,13 +16,24 @@ from typing import Any, Literal, Protocol, runtime_checkable
 SealKind = Literal["tool_sealed", "message_complete", "cancelled"]
 
 
-GateFn = Callable[["ToolCall"], Awaitable[bool]]
+GateFn = Callable[["ToolCall"], Awaitable[bool | str]]
 """Per-call gate signature.
 
-A gate inspects a sealed `ToolCall` and returns `True` to allow eager
-dispatch or `False` to deny it. Returning `False` (or raising) routes the
-call off the eager path — the adapter surfaces the denial in `results()`,
-or the framework's tool step picks the call up.
+A gate inspects a sealed `ToolCall` and returns one of:
+
+- `True`           — allow eager dispatch.
+- `False`          — deny eager dispatch (no reason given).
+- any `str`        — deny eager dispatch with that string as the reason. The
+                     reason flows to `on_dispatch_denied`, the
+                     `GateDeniedError.reason` attribute, and the exception
+                     message — so an adapter that surfaces the denial as a
+                     tool error sends the model a useful explanation. An
+                     empty string `""` is still a denial (the type, not the
+                     truthiness, is what's checked).
+
+Returning `False` / a `str` (or raising) routes the call off the eager
+path — the adapter surfaces the denial in `results()`, or the framework's
+tool step picks the call up.
 
 Gates are awaited inside the same task that consumes the LLM stream; a slow
 gate starves the stream and may trip provider keepalive. Keep gates
@@ -83,8 +94,11 @@ class Tool(Protocol):
             name = "read_file"
             idempotent = True
 
-            async def gate(self, call: ToolCall) -> bool:
-                return not call.arguments["path"].startswith("/etc/")
+            async def gate(self, call: ToolCall) -> bool | str:
+                path = call.arguments.get("path", "")
+                if path.startswith("/etc/"):
+                    return f"path {path!r} is in the system-config denylist"
+                return True
 
             async def __call__(self, arguments): ...
 
@@ -104,6 +118,12 @@ class ObservabilityHook(Protocol):
 
     Default implementation is a no-op. Integrators plug in OTel / Langfuse /
     LangSmith by implementing this protocol.
+
+    Hook calls are wrapped in `contextlib.suppress(Exception)` by the runtime,
+    so a buggy implementation cannot abort a stream. A custom impl missing a
+    method declared here is tolerated at runtime (the call is silently
+    skipped) but will fail `isinstance(x, ObservabilityHook)` — re-add the
+    stubs after upgrading.
     """
 
     def on_seal(self, event: SealEvent) -> None: ...
@@ -111,6 +131,23 @@ class ObservabilityHook(Protocol):
     def on_dispatch_start(self, call: ToolCall) -> None: ...
 
     def on_dispatch_end(self, call: ToolCall, error: Exception | None) -> None: ...
+
+    def on_dispatch_denied(self, call: ToolCall, reason: str) -> None:
+        """Fired when a sealed tool was NOT dispatched on the eager path.
+
+        Four denial paths surface here, each with a distinct `reason`:
+
+        - `reason="non-idempotent tool"`            — `tool.idempotent is False`
+        - `reason=<gate's str>` (incl. `""`)        — gate returned a string
+        - `reason="gate denied <name>"`             — gate returned `False`
+        - `reason="gate raised <Type>: <msg>"`      — gate raised an exception
+
+        Fired BEFORE `EagerDispatchDeniedError` is raised. No paired
+        `on_dispatch_start` / `on_dispatch_end` for these calls — the tool
+        never reached the executor. Symmetric with parse-error seals (which
+        emit `on_seal` but no dispatch hooks).
+        """
+        ...
 
 
 class _NoopObservability:
@@ -124,6 +161,9 @@ class _NoopObservability:
 
     def on_dispatch_end(self, call: ToolCall, error: Exception | None) -> None:
         del call, error
+
+    def on_dispatch_denied(self, call: ToolCall, reason: str) -> None:
+        del call, reason
 
 
 NOOP_OBSERVABILITY: ObservabilityHook = _NoopObservability()

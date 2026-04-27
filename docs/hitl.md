@@ -27,14 +27,23 @@ check runs first, then the gate.
 ```python
 from eager_tools import GateFn, ToolCall
 
-# GateFn = Callable[[ToolCall], Awaitable[bool]]
+# GateFn = Callable[[ToolCall], Awaitable[bool | str]]
+# - True   → allow
+# - False  → deny (no reason)
+# - str    → deny with that string as the reason. The string flows to
+#            on_dispatch_denied AND becomes the GateDeniedError message —
+#            so adapters that surface the denial to the model send a useful
+#            explanation, not a wrapper. Empty string `""` is still a denial.
 
 class ReadFile:
     name = "read_file"
     idempotent = True
 
-    async def gate(self, call: ToolCall) -> bool:
-        return not call.arguments.get("path", "").startswith("/etc/")
+    async def gate(self, call: ToolCall) -> bool | str:
+        path = call.arguments.get("path", "")
+        if path.startswith("/etc/"):
+            return f"path {path!r} is in the system-config denylist"
+        return True
 
     async def __call__(self, arguments: dict[str, Any]) -> Any: ...
 ```
@@ -42,7 +51,7 @@ class ReadFile:
 Note the `.get("path", "")` — gates are responsible for handling missing or
 malformed args defensively. A gate that raises (e.g. `KeyError`) is treated
 as denial: `GateDeniedError` is raised with the original exception on
-`__cause__`.
+`__cause__` and `reason="gate raised <Type>: <msg>"`.
 
 The runtime reads `getattr(tool, "gate", None)`. The attribute is
 duck-typed — it is **not** declared on the `Tool` Protocol so existing
@@ -82,8 +91,11 @@ class ReadFile:
     name = "read_file"
     idempotent = True
 
-    async def gate(self, call: ToolCall) -> bool:
-        return not call.arguments.get("path", "").startswith("/etc/")
+    async def gate(self, call: ToolCall) -> bool | str:
+        path = call.arguments.get("path", "")
+        if path.startswith("/etc/"):
+            return f"path {path!r} is in the system-config denylist"
+        return True
 
     async def __call__(self, arguments): ...
 
@@ -162,13 +174,40 @@ async def gate(self, call: ToolCall) -> bool:
 RuntimeError
 └── EagerDispatchDeniedError      # catch-all for "must not fire eagerly"
     ├── NonIdempotentToolError   # idempotent=False
-    └── GateDeniedError          # gate returned False or raised
+    └── GateDeniedError          # gate returned False / str / raised
+```
+
+Both subclasses carry a `reason: str` attribute. Adapters that route
+denials back to the model can use it directly:
+
+```python
+try:
+    await pool.dispatch(call)
+except EagerDispatchDeniedError as exc:
+    tool_error_message = exc.reason  # safe to send to the LLM
 ```
 
 Adapters catch `EagerDispatchDeniedError` to handle both cases uniformly. Code
 that previously caught only `NonIdempotentToolError` continues to work for
 idempotency denial, but will miss gate denial — migrate to
 `EagerDispatchDeniedError` to catch both.
+
+## Observability
+
+Every denial fires `ObservabilityHook.on_dispatch_denied(call, reason)`
+*before* the exception is raised — so traces and counters stay accurate
+regardless of how the adapter handles the denial. Three reason shapes:
+
+| Path | `reason` value |
+|------|----------------|
+| `idempotent=False` | `"non-idempotent tool"` |
+| Gate returned `str` | The string verbatim (including `""`) |
+| Gate returned `False` | `"gate denied <name>"` |
+| Gate raised | `"gate raised <Type>: <msg>"` |
+
+These calls are unpaired — there is **no** matching `on_dispatch_start` /
+`on_dispatch_end`, because the tool never reached the executor. The OTel
+backend emits a synchronous `eager_tools.dispatch_denied` span per denial.
 
 ## What eager-tools is NOT trying to be
 

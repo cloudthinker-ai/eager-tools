@@ -357,6 +357,9 @@ async def test_observer_exception_does_not_break_dispatch() -> None:
         def on_dispatch_end(self, call: ToolCall, error: Exception | None) -> None:
             raise RuntimeError("observer broken")
 
+        def on_dispatch_denied(self, call: ToolCall, reason: str) -> None:
+            raise RuntimeError("observer broken")
+
     tool = FakeTool("read_file")
     pool = ExecutorPool({"read_file": tool}, observability=BrokenObserver())
     await pool.dispatch(_call("read_file"))
@@ -365,3 +368,212 @@ async def test_observer_exception_does_not_break_dispatch() -> None:
     assert len(results) == 1
     _, result = results[0]
     assert result == {"ok": True}
+
+    # Also confirm the deny-path hook exception doesn't mask the real error:
+    # a non-idempotent tool must still raise NonIdempotentToolError, even when
+    # `on_dispatch_denied` raises inside `_safe_hook`.
+    bad = FakeTool("send_email", idempotent=False)
+    pool2 = ExecutorPool({"send_email": bad}, observability=BrokenObserver())
+    with pytest.raises(NonIdempotentToolError):
+        await pool2.dispatch(_call("send_email"))
+    await pool2.close()
+
+
+# --- 0.3.0: gate-returns-str + on_dispatch_denied + cancel-while-queued ---
+
+
+class _RecordingObserver:
+    """Captures every hook call for assertion. Tolerant of partial protocol;
+    pool calls go through `_safe_hook` which suppresses AttributeError, but
+    we declare all four to make instances pass `isinstance(_, ObservabilityHook)`.
+    """
+
+    def __init__(self) -> None:
+        self.seals: list[SealEvent] = []
+        self.dispatch_starts: list[ToolCall] = []
+        self.dispatch_ends: list[tuple[ToolCall, Exception | None]] = []
+        self.denied: list[tuple[ToolCall, str]] = []
+
+    def on_seal(self, event: SealEvent) -> None:
+        self.seals.append(event)
+
+    def on_dispatch_start(self, call: ToolCall) -> None:
+        self.dispatch_starts.append(call)
+
+    def on_dispatch_end(self, call: ToolCall, error: Exception | None) -> None:
+        self.dispatch_ends.append((call, error))
+
+    def on_dispatch_denied(self, call: ToolCall, reason: str) -> None:
+        self.denied.append((call, reason))
+
+
+async def test_gate_str_return_carries_reason_through_error() -> None:
+    """Gate returning a string denies eager dispatch; the string is exposed via
+    `GateDeniedError.reason` AND the exception message — so adapters that route
+    the denial back to the model send a useful explanation, not a wrapper.
+    """
+
+    class StringGateTool:
+        name = "read_file"
+        idempotent = True
+
+        async def gate(self, call: ToolCall) -> bool | str:
+            del call
+            return "path /etc/shadow is in the system-config denylist"
+
+        async def __call__(self, arguments: dict[str, Any]) -> Any:
+            del arguments
+            return None
+
+    pool = ExecutorPool({"read_file": StringGateTool()})
+    with pytest.raises(GateDeniedError) as info:
+        await pool.dispatch(_call("read_file", path="/etc/shadow"))
+    assert info.value.reason == "path /etc/shadow is in the system-config denylist"
+    # The exception message is the gate's string verbatim — no wrapper noise.
+    assert str(info.value) == "path /etc/shadow is in the system-config denylist"
+    await pool.close()
+
+
+async def test_gate_empty_string_is_denial_not_allow() -> None:
+    """Empty string `""` is denial. We type-check before truthiness exactly so
+    a gate that wants to deny without revealing why doesn't accidentally allow.
+    """
+
+    class EmptyStringGateTool:
+        name = "read_file"
+        idempotent = True
+
+        async def gate(self, call: ToolCall) -> bool | str:
+            del call
+            return ""
+
+        async def __call__(self, arguments: dict[str, Any]) -> Any:
+            del arguments
+            return None
+
+    pool = ExecutorPool({"read_file": EmptyStringGateTool()})
+    with pytest.raises(GateDeniedError) as info:
+        await pool.dispatch(_call("read_file"))
+    assert info.value.reason == ""
+    # Empty reason → fall back to a generic message so str(exc) isn't blank.
+    assert "denied" in str(info.value).lower()
+    await pool.close()
+
+
+async def test_on_dispatch_denied_fires_for_non_idempotent() -> None:
+    tool = FakeTool("send_email", idempotent=False)
+    obs = _RecordingObserver()
+    pool = ExecutorPool({"send_email": tool}, observability=obs)
+    with pytest.raises(NonIdempotentToolError):
+        await pool.dispatch(_call("send_email"))
+    await pool.close()
+    assert len(obs.denied) == 1
+    call, reason = obs.denied[0]
+    assert call.name == "send_email"
+    assert reason == "non-idempotent tool"
+    # No paired dispatch_start — the tool never reached the executor.
+    assert obs.dispatch_starts == []
+    assert obs.dispatch_ends == []
+
+
+async def test_on_dispatch_denied_fires_for_gate_false() -> None:
+    class DenyingTool:
+        name = "read_file"
+        idempotent = True
+
+        async def gate(self, call: ToolCall) -> bool:
+            del call
+            return False
+
+        async def __call__(self, arguments: dict[str, Any]) -> Any:
+            del arguments
+            return None
+
+    obs = _RecordingObserver()
+    pool = ExecutorPool({"read_file": DenyingTool()}, observability=obs)
+    with pytest.raises(GateDeniedError):
+        await pool.dispatch(_call("read_file"))
+    await pool.close()
+    assert len(obs.denied) == 1
+    call, reason = obs.denied[0]
+    assert call.name == "read_file"
+    assert "read_file" in reason  # default reason includes the tool name
+
+
+async def test_on_dispatch_denied_fires_for_gate_str() -> None:
+    class StringGateTool:
+        name = "read_file"
+        idempotent = True
+
+        async def gate(self, call: ToolCall) -> bool | str:
+            del call
+            return "blocked: forbidden path"
+
+        async def __call__(self, arguments: dict[str, Any]) -> Any:
+            del arguments
+            return None
+
+    obs = _RecordingObserver()
+    pool = ExecutorPool({"read_file": StringGateTool()}, observability=obs)
+    with pytest.raises(GateDeniedError):
+        await pool.dispatch(_call("read_file"))
+    await pool.close()
+    assert obs.denied == [(obs.denied[0][0], "blocked: forbidden path")]
+
+
+async def test_on_dispatch_denied_fires_for_gate_raises() -> None:
+    class RaisingGateTool:
+        name = "read_file"
+        idempotent = True
+
+        async def gate(self, call: ToolCall) -> bool:
+            del call
+            raise ValueError("policy lookup failed")
+
+        async def __call__(self, arguments: dict[str, Any]) -> Any:
+            del arguments
+            return None
+
+    obs = _RecordingObserver()
+    pool = ExecutorPool({"read_file": RaisingGateTool()}, observability=obs)
+    with pytest.raises(GateDeniedError):
+        await pool.dispatch(_call("read_file"))
+    await pool.close()
+    assert len(obs.denied) == 1
+    _, reason = obs.denied[0]
+    assert "ValueError" in reason
+    assert "policy lookup failed" in reason
+
+
+async def test_dispatch_end_fires_on_cancel_while_queued() -> None:
+    """Tool tasks cancelled while waiting on the semaphore must still close their
+    OTel span. Pre-0.3.0 the `try` block sat inside `async with self._sem`, so
+    cancellation during `acquire` skipped `on_dispatch_end` entirely — bounded
+    leak in the OTel impl. This test pins the fix.
+    """
+    obs = _RecordingObserver()
+    release = asyncio.Event()
+
+    class BlockingTool:
+        name = "block"
+        idempotent = True
+
+        async def __call__(self, arguments: dict[str, Any]) -> Any:
+            del arguments
+            await release.wait()
+            return {"ok": True}
+
+    pool = ExecutorPool({"block": BlockingTool()}, observability=obs, max_concurrent=1)
+    await pool.dispatch(_call("block"))  # tool 1: holds the semaphore
+    await pool.dispatch(_call("block"))  # tool 2: queued on semaphore
+    # Let the event loop schedule both tasks so tool 2 actually awaits the sem.
+    await asyncio.sleep(0)
+    assert pool.in_flight == 2
+    await pool.cancel_all()
+    # Both tasks must have closed their dispatch span — even tool 2 which never
+    # acquired the semaphore.
+    assert len(obs.dispatch_starts) == 2
+    assert len(obs.dispatch_ends) == 2
+    # Cancelled paths report no error (consistent with 0.2.x semantics).
+    assert all(err is None for _, err in obs.dispatch_ends)
+    release.set()  # cleanup; not strictly needed since tasks are cancelled

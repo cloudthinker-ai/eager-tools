@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "eager-tools-langgraph"
-version = "0.2.0"
+version = "0.3.0"
 description = "LangGraph adapter for eager tool calling — middleware for langchain.agents.create_agent."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -19,7 +19,7 @@ classifiers = [
     "Typing :: Typed",
 ]
 dependencies = [
-    "eager-tools-core>=0.2.0",
+    "eager-tools-core>=0.3.0",
     "langgraph>=1.1.6",
     "langchain>=1.0",
     "langchain-core>=1.2.14",

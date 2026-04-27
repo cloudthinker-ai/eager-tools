@@ -34,15 +34,22 @@ from eager_tools_anthropic import AnthropicEagerStream
 
 class ReadFile:
     """Idempotent read with a path-allowlist gate. The gate denies any path
-    rooted at `/etc/`. Sync-fast — in-memory string predicate.
+    rooted at `/etc/` and returns the *reason* as a string — that string
+    becomes `GateDeniedError.reason` and the exception message, so an
+    adapter that surfaces the denial to the model sends a useful explanation
+    instead of a generic wrapper.
+
+    Sync-fast — in-memory string predicate.
     """
 
     name = "read_file"
     idempotent = True
 
-    async def gate(self, call: ToolCall) -> bool:
+    async def gate(self, call: ToolCall) -> bool | str:
         path = call.arguments.get("path", "")
-        return not path.startswith("/etc/")
+        if path.startswith("/etc/"):
+            return f"path {path!r} is in the system-config denylist"
+        return True
 
     async def __call__(self, arguments: dict[str, Any]) -> Any:
         return f"<contents of {arguments['path']}>"
