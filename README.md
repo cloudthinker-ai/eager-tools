@@ -6,7 +6,7 @@
 
 [![PyPI](https://img.shields.io/pypi/v/eager-tools-core.svg)](https://pypi.org/project/eager-tools-core/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](./LICENSE)
-[![CI](https://github.com/eager-tools/eager-tools/actions/workflows/ci.yml/badge.svg)](https://github.com/eager-tools/eager-tools/actions)
+[![CI](https://github.com/cloudthinker-ai/eager-tools/actions/workflows/ci.yml/badge.svg)](https://github.com/cloudthinker-ai/eager-tools/actions)
 [![Docs](https://img.shields.io/badge/docs-METHOD.md-blue.svg)](./METHOD.md)
 
 ---
@@ -66,7 +66,7 @@ Full table + repro details: [`bench/results.md`](./bench/results.md).
 ```bash
 pip install eager-tools-core eager-tools-anthropic   # once published
 # or, from source:
-git clone https://github.com/eager-tools/eager-tools && cd eager-tools && make sync
+git clone https://github.com/cloudthinker-ai/eager-tools && cd eager-tools && make sync
 ```
 
 ```python

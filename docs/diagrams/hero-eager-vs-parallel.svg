@@ -175,7 +175,7 @@
     <text x="692" y="424" text-anchor="middle">7s</text>
     <text x="772" y="424" text-anchor="middle">8s</text>
   </g>
-  <text class="sub" x="40" y="448">eager-tools · github.com/eager-tools/eager-tools</text>
+  <text class="sub" x="40" y="448">eager-tools · github.com/cloudthinker-ai/eager-tools</text>
 
   <!-- ============================ PLAYHEAD ============================ -->
   <line class="playhead" y1="92" y2="400">

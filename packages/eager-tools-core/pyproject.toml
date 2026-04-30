@@ -32,9 +32,9 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://eager-tools.dev"
-Repository = "https://github.com/eager-tools/eager-tools"
-Issues = "https://github.com/eager-tools/eager-tools/discussions"
+Homepage = "https://github.com/cloudthinker-ai/eager-tools"
+Repository = "https://github.com/cloudthinker-ai/eager-tools"
+Issues = "https://github.com/cloudthinker-ai/eager-tools/discussions"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/eager_tools"]

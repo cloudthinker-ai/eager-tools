@@ -9,7 +9,7 @@
 | **Target** | LLM provider streaming APIs (SSE / HTTP/2 streaming) |
 | **Relates to** | `METHOD.md` in this repo, the [`eager-tools`](../README.md) reference implementation |
 
-> **Call for review.** This RFC proposes a minimal, provider-neutral event shape that enables **eager tool dispatch** — tools starting execution the moment their block finishes streaming, without waiting for the full assistant message. Feedback welcome via [GitHub Discussions](https://github.com/eager-tools/eager-tools/discussions).
+> **Call for review.** This RFC proposes a minimal, provider-neutral event shape that enables **eager tool dispatch** — tools starting execution the moment their block finishes streaming, without waiting for the full assistant message. Feedback welcome via [GitHub Discussions](https://github.com/cloudthinker-ai/eager-tools/discussions).
 
 ---
 
@@ -213,7 +213,7 @@ Because eagerly-dispatched tools begin executing before `message_stop`, a model 
 
 ## 9. Reference Implementation
 
-[`eager-tools`](https://github.com/eager-tools/eager-tools) provides:
+[`eager-tools`](https://github.com/cloudthinker-ai/eager-tools) provides:
 
 - **`eager-tools-core`** — provider-agnostic `SealDetector` and `ExecutorPool` implementing the §5 state machine. Passes a golden-trace conformance suite.
 - **`eager-tools-anthropic`** — adapter that maps Anthropic SSE events to `SealEvent`s, with automatic fallback to heuristic detection when STDP is absent.

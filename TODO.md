@@ -12,9 +12,9 @@ Decisions to lock BEFORE writing any code.
 
 - [ ] Pick strategic posture: focused / expand / hedge — owner: founders — 1 day — `ROADMAP §7.1` (default = hedge)
 - [ ] Lock launch target date (4–6 weeks out) — owner: founders — 1 hr — `ROADMAP §8.1`
-- [ ] Reserve domain `eager-tools.dev` and (optionally) `eager.cloud` — owner: founders — 30 min — `ROADMAP §5.5`
-- [ ] Reserve GitHub org / repo name `eager-tools` — owner: founders — 15 min
-- [ ] Reserve PyPI namespace `eager-tools` + `eager-tools-*` — owner: founders — 30 min
+- [x] Domain — using `github.com/cloudthinker-ai/eager-tools` as canonical URL (no separate `eager-tools.dev` purchase) — 2026-04-30
+- [x] GitHub org — `cloudthinker-ai` (existing org, local machine has push perms); repo to live at `cloudthinker-ai/eager-tools` — 2026-04-30
+- [x] PyPI namespace `eager-tools` + `eager-tools-*` — reserved; publish token in `.env` (`PYPI_TOKEN`) — 2026-04-30
 - [ ] Confirm legal sign-off on extracting CloudThinker `stream_handler.py` logic into MIT-licensed OSS — owner: founders — 1 day
 - [x] Decide async-only vs sync+async: **async-only** (committed in core API) — 2026-04-15
 - [x] Pick license: **MIT** (committed in `/LICENSE` + `pyproject.toml`) — 2026-04-15
@@ -136,7 +136,7 @@ Decisions to lock BEFORE writing any code.
 
 ### Public benchmark dashboard
 
-- [ ] Build `eager-tools.dev/bench` static site — 3 days — `ROADMAP §4.2`
+- [ ] Build bench dashboard on GitHub Pages (`cloudthinker-ai.github.io/eager-tools/bench` or repo wiki) — 3 days — `ROADMAP §4.2`
 - [ ] Nightly cron: rerun bench against latest Claude/GPT versions, post diff — 1 day
 - [ ] Public changelog of provider-side regressions/improvements — ongoing
 

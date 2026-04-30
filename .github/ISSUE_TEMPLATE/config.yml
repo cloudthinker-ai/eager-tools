@@ -1,15 +1,15 @@
 blank_issues_enabled: false
 contact_links:
   - name: Bug reports and questions
-    url: https://github.com/eager-tools/eager-tools/discussions
+    url: https://github.com/cloudthinker-ai/eager-tools/discussions
     about: |
       We intentionally use Discussions instead of Issues to keep signal-to-noise high.
       Please open a Discussion for bugs, questions, or adapter requests.
   - name: Security vulnerabilities
-    url: https://github.com/eager-tools/eager-tools/security/advisories/new
+    url: https://github.com/cloudthinker-ai/eager-tools/security/advisories/new
     about: |
       Please report security issues privately via GitHub Security Advisories.
   - name: Method reference
-    url: https://github.com/eager-tools/eager-tools/blob/main/METHOD.md
+    url: https://github.com/cloudthinker-ai/eager-tools/blob/main/METHOD.md
     about: |
       The canonical technical reference for eager tool calling.
