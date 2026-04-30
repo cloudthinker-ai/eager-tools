@@ -1,0 +1,64 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: Build + publish to PyPI
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/eager-tools-core/
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+          cache-dependency-glob: "**/pyproject.toml"
+
+      - name: Set up Python 3.11
+        run: uv python install 3.11
+
+      - name: Verify tag matches all 4 package versions
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          fail=0
+          for pkg in eager-tools-core eager-tools-anthropic eager-tools-openai eager-tools-langgraph; do
+            v=$(grep -E '^version = ' "packages/$pkg/pyproject.toml" | head -1 | cut -d'"' -f2)
+            if [ "$v" != "$tag" ]; then
+              echo "::error file=packages/$pkg/pyproject.toml::Tag $GITHUB_REF_NAME implies version $tag but $pkg pyproject is $v"
+              fail=1
+            fi
+          done
+          [ $fail -eq 0 ] || exit 1
+          echo "All 4 packages at version $tag — proceeding"
+
+      - name: Build all 4 packages
+        run: |
+          for pkg in eager-tools-core eager-tools-anthropic eager-tools-openai eager-tools-langgraph; do
+            echo "::group::build $pkg"
+            (cd "packages/$pkg" && uv build)
+            echo "::endgroup::"
+          done
+
+      - name: Publish to PyPI (core first, then dependents)
+        env:
+          UV_PUBLISH_TOKEN: ${{ secrets.PYPI_TOKEN }}
+        run: |
+          for pkg in eager-tools-core eager-tools-anthropic eager-tools-openai eager-tools-langgraph; do
+            echo "::group::publish $pkg"
+            # --check-url skips files whose version already exists on the
+            # index, so re-running a tag (after a partial failure) is safe.
+            uv publish \
+              --check-url https://pypi.org/simple/ \
+              "packages/$pkg/dist/"*
+            echo "::endgroup::"
+          done
