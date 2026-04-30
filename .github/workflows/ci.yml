@@ -53,7 +53,7 @@ jobs:
         run: uv run pytest -v
 
   typecheck:
-    name: typecheck (pyright)
+    name: typecheck (pyrefly)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -71,9 +71,9 @@ jobs:
         working-directory: packages/eager-tools-core
         run: uv sync --extra dev
 
-      - name: Pyright
+      - name: Pyrefly
         working-directory: packages/eager-tools-core
-        run: uv run pyright
+        run: uv run pyrefly check
 
   bench-smoke:
     name: bench harness smoke

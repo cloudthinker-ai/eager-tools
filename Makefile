@@ -76,8 +76,8 @@ fmt-check: ## Ruff format --check (no write)
 	done
 
 .PHONY: typecheck
-typecheck: ## Pyright across the workspace
-	cd $(CORE) && uv run pyright
+typecheck: ## Pyrefly across the core package
+	cd $(CORE) && uv run pyrefly check
 
 .PHONY: check
 check: lint fmt-check typecheck test ## Lint + format-check + typecheck + tests

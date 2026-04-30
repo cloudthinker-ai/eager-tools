@@ -9,6 +9,7 @@ Skipped wholesale when `opentelemetry.sdk` is not installed — the runtime
 from __future__ import annotations
 
 import sys
+from collections.abc import Iterator
 
 import pytest
 
@@ -23,7 +24,7 @@ from eager_tools import OTelObservability, SealEvent, ToolCall
 
 
 @pytest.fixture
-def exporter() -> InMemorySpanExporter:
+def exporter() -> Iterator[InMemorySpanExporter]:
     """Fresh in-memory exporter per test, wired to a fresh TracerProvider.
 
     Note: OTel only honors the FIRST `set_tracer_provider` call per process —
@@ -95,7 +96,7 @@ def test_on_seal_parse_error_records_exception(exporter: InMemorySpanExporter) -
     spans = [s for s in exporter.get_finished_spans() if s.name == "eager_tools.seal"]
     assert len(spans) == 1
     attrs = spans[0].attributes or {}
-    assert "ValueError" in attrs["eager.parse_error"]
+    assert "ValueError" in str(attrs["eager.parse_error"])
     # record_exception adds an "exception" event to the span.
     event_names = [ev.name for ev in spans[0].events]
     assert "exception" in event_names

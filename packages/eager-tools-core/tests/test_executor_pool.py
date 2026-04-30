@@ -80,7 +80,7 @@ async def test_dispatch_unknown_tool_surfaces_keyerror_in_results() -> None:
 
 
 async def test_errors_isolated_between_tools() -> None:
-    tools = {
+    tools: dict[str, Any] = {
         "good_1": FakeTool("good_1"),
         "bad": FakeTool("bad", error=RuntimeError("boom")),
         "good_2": FakeTool("good_2"),
