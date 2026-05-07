@@ -182,7 +182,7 @@ Bug reports + design discussions happen in **GitHub Discussions** — issues are
 
 This pattern was extracted from production at [CloudThinker](https://cloudthinker.io), where it cuts median agent task latency by 50%. Internal codename: *tool-call pipelining*. External name: *eager tool calling*.
 
-Read the full production story: [*Eager Tool Calling: How We Made Agents 21× Faster on Long Tool Chains*](https://cloudthinker.io/blog/eager-tool-calling-21x-faster-agents).
+Read the full production story: [*Eager Tool Calling at CloudThinker*](https://cloudthinker.io/blogs/eager-tool-calling-21x-faster-agents).
 
 ## License
 
