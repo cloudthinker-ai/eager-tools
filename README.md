@@ -14,7 +14,7 @@
 ## The problem in one graph
 
 <p align="center">
-  <img src="./docs/diagrams/hero-eager-vs-parallel.svg" alt="Animated timeline: parallel finishes in 6.5s, eager finishes in 4.5s on the same workload" width="760"/>
+  <img src="./docs/diagrams/eager-vs-classic-timeline.svg" alt="Timeline: parallel waits for stream to finish; eager fires each tool the moment its block seals — tools and stream overlap." width="760"/>
 </p>
 
 <details>
@@ -48,6 +48,10 @@ assistant message concurrently. Eager's win comes from overlapping tools
 with the *stream itself* — something parallel dispatch can't do.
 Full table + repro details: [`bench/results.md`](./bench/results.md).
 
+<p align="center">
+  <img src="./docs/diagrams/benchmark-results-chart.svg" alt="Bar chart: sequential vs parallel vs eager across 3-tool, 9-tool, and 15-tool workloads. Eager wins by 1.21×–1.46× vs parallel." width="760"/>
+</p>
+
 | Workload | Sequential | Parallel | **Eager** | Speedup vs parallel |
 |----------|------------|----------|-----------|---------------------|
 | 3-tool analytics | 4.90s | 3.50s | **2.90s** | 1.21× |
@@ -64,45 +68,68 @@ Full table + repro details: [`bench/results.md`](./bench/results.md).
 ## 60-second quickstart
 
 ```bash
-pip install eager-tools-core eager-tools-anthropic   # once published
+pip install eager-tools-core eager-tools-langgraph   # once published
 # or, from source:
 git clone https://github.com/cloudthinker-ai/eager-tools && cd eager-tools && make sync
 ```
 
 ```python
-import asyncio
-from anthropic import AsyncAnthropic
-from eager_tools_anthropic import AnthropicEagerStream
+import asyncio, os
+from langchain.agents import create_agent
+from langchain_anthropic import ChatAnthropic
+from langchain_core.messages import HumanMessage
+from langchain_core.tools import tool
+from eager_tools_langgraph import eager_middleware
 
-class ReadFile:
-    name = "read_file"
-    idempotent = True  # safe to fire eagerly
-    async def __call__(self, args):
-        return open(args["path"]).read()
+class SlowTool:
+    def __init__(self, name: str, delay: float = 2.0):
+        self.name = name
+        self.idempotent = True
+        self._delay = delay
+    async def __call__(self, arguments):
+        await asyncio.sleep(self._delay)
+        return {"name": self.name, "args": arguments, "ok": True}
+
+@tool
+def get_weather(city: str) -> str:
+    """Get current weather for a city."""
+    return ""
+
+@tool
+def get_stock_price(ticker: str) -> str:
+    """Get the current stock price for a ticker symbol."""
+    return ""
+
+@tool
+def get_news(topic: str) -> str:
+    """Get recent news on a topic."""
+    return ""
+
+eager_tools = {
+    "get_weather":    SlowTool("get_weather"),
+    "get_stock_price": SlowTool("get_stock_price"),
+    "get_news":       SlowTool("get_news"),
+}
 
 async def main():
-    client = AsyncAnthropic()
-    tools = {"read_file": ReadFile()}
-
-    async with client.messages.stream(
-        model="claude-sonnet-4-5",
-        max_tokens=1024,
-        tools=[{"name": "read_file", "description": "...", "input_schema": {...}}],
-        messages=[{"role": "user", "content": "..."}],
-    ) as raw:
-        stream = AnthropicEagerStream(raw, tools=tools)
-        async for event in stream.events():
-            if event.kind == "tool_sealed":
-                print(f"dispatched {event.tool_call.name} mid-stream")
-        async for call, result in stream.results():
-            print(f"{call.name} → {result}")
+    agent = create_agent(
+        model=ChatAnthropic(model_name="claude-sonnet-4-5", timeout=60.0, stop=None),
+        tools=[get_weather, get_stock_price, get_news],
+        middleware=[eager_middleware(eager_tools)],
+    )
+    result = await agent.ainvoke({
+        "messages": [HumanMessage(
+            "Get the weather in NYC, the AAPL stock price, and recent AI news."
+        )]
+    })
+    print(result["messages"][-1].content)
 
 asyncio.run(main())
 ```
 
-Five lines of integration. No LangGraph required. Works with any async
-Anthropic stream — and with OpenAI / OpenRouter via `eager-tools-openai`.
-Runnable variants in [`examples/`](./examples).
+One middleware line wires eager dispatch into any `create_agent` call — no
+changes to your tools or prompt. Works with OpenAI too: swap `ChatAnthropic`
+for `ChatOpenAI`. Runnable variants in [`examples/`](./examples).
 
 ---
 
@@ -114,40 +141,18 @@ The **stream phase still happens first**. Tools still wait for `message_stop`. A
 
 See [`METHOD.md`](./METHOD.md) for the full mechanism: the seal event, the `tool_call_id` invariant, the runtime contract, and the edge cases.
 
+<p align="center">
+  <img src="./docs/diagrams/seal-mechanism-flow.svg" alt="Seal mechanism: a new tool_call_id in the stream triggers a SealEvent, which dispatches the completed tool to the ExecutorPool while the stream buffers the next block." width="720"/>
+</p>
+
 ---
 
-## Project layout
-
-```
-eager-tools/
-├── METHOD.md               ← provider-agnostic method reference
-├── ROADMAP.md              ← OSS strategy, GTM, beyond-OSS ladders
-├── NEXT.md                 ← v0.1 execution plan
-├── TODO.md                 ← checkbox checklist
-├── LICENSE                 ← MIT
-├── Makefile                ← sync, test, lint, examples, bench
-├── docs/
-│   ├── concept.md                               ← what & why
-│   ├── when-not-to-use.md                       ← when classic dispatch wins
-│   └── rfc-streaming-tool-dispatch-protocol.md  ← cross-provider RFC
-├── packages/
-│   ├── eager-tools-core/        ← provider-agnostic SealDetector + ExecutorPool
-│   ├── eager-tools-anthropic/   ← (v0.1) Anthropic SDK adapter
-│   └── eager-tools-openai/      ← (v0.1) OpenAI / OpenRouter adapter
-├── examples/                    ← 01_minimal, 02_anthropic, 03_openai, 04_cancel, 05_openrouter
-├── bench/                       ← synthetic harness + checked-in results.md
-└── .github/workflows/ci.yml
-```
-
-Future packages (`eager-tools-claude-agent`) live in the [Status](#status)
-table, not yet in-tree.
-
 <p align="center">
-  <img src="./docs/diagrams/architecture.svg" alt="Architecture: provider stream → adapter → SealDetector → ExecutorPool → user code" width="760"/>
+  <img src="./docs/diagrams/stream-handler-architecture.svg" alt="Stream handler architecture: provider stream → adapter → SealDetector → ExecutorPool → user events and results." width="760"/>
 </p>
 
 For the per-block mechanism (chunks → buffer → seal → dispatch), see
-[`docs/diagrams/seal-mechanism.svg`](./docs/diagrams/seal-mechanism.svg).
+[`docs/diagrams/seal-mechanism-flow.svg`](./docs/diagrams/seal-mechanism-flow.svg).
 
 ## When NOT to use it
 

@@ -1,0 +1,423 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg
+          viewBox="0 0 720 340"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <defs>
+            <filter
+              id="glow-amber-seal"
+              x="-50%"
+              y="-50%"
+              width="200%"
+              height="200%"
+            >
+              <feDropShadow
+                dx="0"
+                dy="0"
+                stdDeviation="4"
+                flood-color="#f59e0b"
+                flood-opacity="0.4"
+              />
+            </filter>
+            <filter
+              id="glow-emerald-seal"
+              x="-50%"
+              y="-50%"
+              width="200%"
+              height="200%"
+            >
+              <feDropShadow
+                dx="0"
+                dy="0"
+                stdDeviation="3"
+                flood-color="#10b981"
+                flood-opacity="0.35"
+              />
+            </filter>
+          </defs>
+
+          <!-- ─── Column 1: incoming stream chunks ──────────────────────────── -->
+          <text
+            x="20"
+            y="22"
+            fill="rgba(255,255,255,0.55)"
+            font-family="IBM Plex Mono, monospace"
+            font-size="9"
+            font-weight="700"
+          >
+            STREAM CHUNKS (TIME →)
+          </text>
+
+          <!-- chunk A — already buffered, dimmed -->
+          <rect
+            x="20"
+            y="38"
+            width="160"
+            height="34"
+            rx="4"
+            fill="rgba(249,115,22,0.06)"
+            stroke="rgba(249,115,22,0.35)"
+            stroke-width="1.2"
+          />
+          <text
+            x="100"
+            y="60"
+            text-anchor="middle"
+            fill="rgba(249,115,22,0.7)"
+            font-family="IBM Plex Mono, monospace"
+            font-size="11"
+            font-weight="700"
+          >
+            chunk(id=A)
+          </text>
+
+          <!-- chunk A — continued -->
+          <rect
+            x="20"
+            y="82"
+            width="160"
+            height="34"
+            rx="4"
+            fill="rgba(249,115,22,0.06)"
+            stroke="rgba(249,115,22,0.35)"
+            stroke-width="1.2"
+          />
+          <text
+            x="100"
+            y="104"
+            text-anchor="middle"
+            fill="rgba(249,115,22,0.7)"
+            font-family="IBM Plex Mono, monospace"
+            font-size="11"
+            font-weight="700"
+          >
+            chunk(id=A)
+          </text>
+
+          <!-- chunk B — THE TRIGGER, highlighted -->
+          <g filter="url(#glow-amber-seal)">
+            <rect
+              x="20"
+              y="138"
+              width="160"
+              height="44"
+              rx="4"
+              fill="rgba(245,158,11,0.18)"
+              stroke="rgba(245,158,11,0.9)"
+              stroke-width="1.8"
+            />
+          </g>
+          <text
+            x="100"
+            y="158"
+            text-anchor="middle"
+            fill="rgba(245,158,11,1)"
+            font-family="IBM Plex Mono, monospace"
+            font-size="11"
+            font-weight="700"
+          >
+            chunk(id=B)
+          </text>
+          <text
+            x="100"
+            y="172"
+            text-anchor="middle"
+            fill="rgba(255,255,255,0.75)"
+            font-family="IBM Plex Mono, monospace"
+            font-size="9"
+            font-weight="700"
+          >
+            ← NEW ID
+          </text>
+
+          <!-- arrow chunk B → SealDetector -->
+          <line
+            x1="180"
+            y1="160"
+            x2="248"
+            y2="160"
+            stroke="rgba(245,158,11,0.7)"
+            stroke-width="1.5"
+          />
+          <polygon
+            points="248,156 256,160 248,164"
+            fill="rgba(245,158,11,0.85)"
+          />
+
+          <!-- ─── Column 2: SealDetector ────────────────────────────────────── -->
+          <text
+            x="260"
+            y="22"
+            fill="rgba(255,255,255,0.55)"
+            font-family="IBM Plex Mono, monospace"
+            font-size="9"
+            font-weight="700"
+          >
+            SEAL DETECTOR
+          </text>
+
+          <g filter="url(#glow-amber-seal)">
+            <rect
+              x="260"
+              y="60"
+              width="240"
+              height="200"
+              rx="5"
+              fill="rgba(245,158,11,0.08)"
+              stroke="rgba(245,158,11,0.6)"
+              stroke-width="1.5"
+            />
+          </g>
+
+          <text
+            x="380"
+            y="84"
+            text-anchor="middle"
+            fill="rgba(245,158,11,1)"
+            font-family="IBM Plex Mono, monospace"
+            font-size="11"
+            font-weight="700"
+          >
+            prev_id != new_id ?
+          </text>
+
+          <!-- state -->
+          <text
+            x="278"
+            y="112"
+            fill="rgba(255,255,255,0.7)"
+            font-family="IBM Plex Mono, monospace"
+            font-size="9"
+          >
+            _last_id: A → B
+          </text>
+          <text
+            x="278"
+            y="128"
+            fill="rgba(255,255,255,0.5)"
+            font-family="IBM Plex Mono, monospace"
+            font-size="9"
+          >
+            tool_streams[A]: complete
+          </text>
+
+          <!-- divider -->
+          <line
+            x1="278"
+            y1="146"
+            x2="482"
+            y2="146"
+            stroke="rgba(245,158,11,0.3)"
+            stroke-dasharray="2 2"
+          />
+
+          <text
+            x="380"
+            y="168"
+            text-anchor="middle"
+            fill="rgba(245,158,11,0.95)"
+            font-family="IBM Plex Mono, monospace"
+            font-size="10"
+            font-weight="700"
+          >
+            SEAL EVENT
+          </text>
+          <text
+            x="380"
+            y="184"
+            text-anchor="middle"
+            fill="rgba(255,255,255,0.65)"
+            font-family="IBM Plex Mono, monospace"
+            font-size="9"
+          >
+            on_tool_call_sealed(
+          </text>
+          <text
+            x="380"
+            y="198"
+            text-anchor="middle"
+            fill="rgba(255,255,255,0.65)"
+            font-family="IBM Plex Mono, monospace"
+            font-size="9"
+          >
+            tool_streams[A])
+          </text>
+
+          <text
+            x="380"
+            y="232"
+            text-anchor="middle"
+            fill="rgba(255,255,255,0.55)"
+            font-family="IBM Plex Mono, monospace"
+            font-size="9"
+            font-style="italic"
+          >
+            chunk B keeps buffering →
+          </text>
+
+          <!-- arrow SealDetector → ExecutorPool -->
+          <line
+            x1="500"
+            y1="160"
+            x2="568"
+            y2="160"
+            stroke="rgba(16,185,129,0.7)"
+            stroke-width="1.5"
+          />
+          <polygon
+            points="568,156 576,160 568,164"
+            fill="rgba(16,185,129,0.9)"
+          />
+          <text
+            x="534"
+            y="152"
+            text-anchor="middle"
+            fill="rgba(255,255,255,0.55)"
+            font-family="IBM Plex Mono, monospace"
+            font-size="8"
+          >
+            dispatch
+          </text>
+
+          <!-- ─── Column 3: ExecutorPool ────────────────────────────────────── -->
+          <text
+            x="580"
+            y="22"
+            fill="rgba(255,255,255,0.55)"
+            font-family="IBM Plex Mono, monospace"
+            font-size="9"
+            font-weight="700"
+          >
+            EXECUTOR POOL
+          </text>
+
+          <g filter="url(#glow-emerald-seal)">
+            <rect
+              x="580"
+              y="60"
+              width="120"
+              height="200"
+              rx="5"
+              fill="rgba(16,185,129,0.08)"
+              stroke="rgba(16,185,129,0.55)"
+              stroke-width="1.5"
+            />
+          </g>
+
+          <text
+            x="640"
+            y="84"
+            text-anchor="middle"
+            fill="rgba(16,185,129,1)"
+            font-family="IBM Plex Mono, monospace"
+            font-size="11"
+            font-weight="700"
+          >
+            tool A
+          </text>
+          <text
+            x="640"
+            y="98"
+            text-anchor="middle"
+            fill="rgba(255,255,255,0.55)"
+            font-family="IBM Plex Mono, monospace"
+            font-size="8"
+          >
+            running
+          </text>
+
+          <!-- progress bar — concurrent execution -->
+          <rect
+            x="596"
+            y="118"
+            width="88"
+            height="8"
+            rx="2"
+            fill="rgba(255,255,255,0.08)"
+          />
+          <rect
+            x="596"
+            y="118"
+            width="54"
+            height="8"
+            rx="2"
+            fill="rgba(16,185,129,0.65)"
+          />
+
+          <text
+            x="640"
+            y="148"
+            text-anchor="middle"
+            fill="rgba(255,255,255,0.55)"
+            font-family="IBM Plex Mono, monospace"
+            font-size="8"
+          >
+            (concurrent
+          </text>
+          <text
+            x="640"
+            y="160"
+            text-anchor="middle"
+            fill="rgba(255,255,255,0.55)"
+            font-family="IBM Plex Mono, monospace"
+            font-size="8"
+          >
+            with stream)
+          </text>
+
+          <!-- divider -->
+          <line
+            x1="596"
+            y1="182"
+            x2="684"
+            y2="182"
+            stroke="rgba(16,185,129,0.25)"
+            stroke-dasharray="2 2"
+          />
+
+          <text
+            x="640"
+            y="204"
+            text-anchor="middle"
+            fill="rgba(255,255,255,0.4)"
+            font-family="IBM Plex Mono, monospace"
+            font-size="9"
+            font-style="italic"
+          >
+            tool B: queued
+          </text>
+          <text
+            x="640"
+            y="220"
+            text-anchor="middle"
+            fill="rgba(255,255,255,0.3)"
+            font-family="IBM Plex Mono, monospace"
+            font-size="9"
+            font-style="italic"
+          >
+            tool C: queued
+          </text>
+
+          <!-- bottom caption -->
+          <text
+            x="360"
+            y="294"
+            text-anchor="middle"
+            fill="rgba(255,255,255,0.6)"
+            font-family="IBM Plex Mono, monospace"
+            font-size="9"
+          >
+            Tool A starts the moment chunk(id=B) arrives — not at message_stop.
+          </text>
+          <text
+            x="360"
+            y="310"
+            text-anchor="middle"
+            fill="rgba(255,255,255,0.45)"
+            font-family="IBM Plex Mono, monospace"
+            font-size="9"
+          >
+            Stream + tool execution overlap on the wall clock.
+          </text>
+        </svg>

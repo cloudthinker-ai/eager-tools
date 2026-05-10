@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg viewBox="0 0 760 380" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <filter id="glow-emerald-bench" x="-50%" y="-50%" width="200%" height="200%">
+      <feDropShadow dx="0" dy="0" stdDeviation="3" flood-color="#10b981" flood-opacity="0.4"/>
+    </filter>
+  </defs>
+  <!-- Legend -->
+  <rect x="80" y="22" width="14" height="10" fill="rgba(255,255,255,0.18)" stroke="rgba(255,255,255,0.4)" stroke-width="1"/>
+  <text x="100" y="31" fill="rgba(255,255,255,0.7)" font-family="IBM Plex Mono, monospace" font-size="9">sequential</text>
+  <rect x="200" y="22" width="14" height="10" fill="rgba(249,115,22,0.18)" stroke="rgba(249,115,22,0.7)" stroke-width="1"/>
+  <text x="220" y="31" fill="rgba(255,255,255,0.7)" font-family="IBM Plex Mono, monospace" font-size="9">parallel</text>
+  <g filter="url(#glow-emerald-bench)">
+    <rect x="310" y="22" width="14" height="10" fill="rgba(16,185,129,0.25)" stroke="rgba(16,185,129,0.85)" stroke-width="1"/>
+  </g>
+  <text x="330" y="31" fill="rgba(16,185,129,1)" font-family="IBM Plex Mono, monospace" font-size="9" font-weight="700">eager</text>
+  <!-- Y axis -->
+  <line x1="78" y1="320.0" x2="700" y2="320.0" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
+  <text x="70" y="323.0" text-anchor="end" fill="rgba(255,255,255,0.55)" font-family="IBM Plex Mono, monospace" font-size="9">0s</text>
+  <line x1="78" y1="257.5" x2="700" y2="257.5" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
+  <text x="70" y="260.5" text-anchor="end" fill="rgba(255,255,255,0.55)" font-family="IBM Plex Mono, monospace" font-size="9">8s</text>
+  <line x1="78" y1="195.0" x2="700" y2="195.0" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
+  <text x="70" y="198.0" text-anchor="end" fill="rgba(255,255,255,0.55)" font-family="IBM Plex Mono, monospace" font-size="9">16s</text>
+  <line x1="78" y1="132.5" x2="700" y2="132.5" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
+  <text x="70" y="135.5" text-anchor="end" fill="rgba(255,255,255,0.55)" font-family="IBM Plex Mono, monospace" font-size="9">24s</text>
+  <line x1="78" y1="70.0" x2="700" y2="70.0" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
+  <text x="70" y="73.0" text-anchor="end" fill="rgba(255,255,255,0.55)" font-family="IBM Plex Mono, monospace" font-size="9">32s</text>
+  <line x1="78" y1="60" x2="78" y2="320" stroke="rgba(255,255,255,0.25)" stroke-width="1"/>
+  <line x1="78" y1="320" x2="700" y2="320" stroke="rgba(255,255,255,0.25)" stroke-width="1"/>
+  <text x="-190" y="28" transform="rotate(-90)" text-anchor="middle" fill="rgba(255,255,255,0.55)" font-family="IBM Plex Mono, monospace" font-size="9">wall clock (seconds)</text>
+  <!-- Bars -->
+  <rect x="146" y="281.72" width="32" height="38.28" fill="rgba(255,255,255,0.18)" stroke="rgba(255,255,255,0.4)" stroke-width="1"/>
+  <text x="162.0" y="277.72" text-anchor="middle" fill="rgba(255,255,255,0.65)" font-family="IBM Plex Mono, monospace" font-size="8">4.9s</text>
+  <rect x="184" y="292.66" width="32" height="27.34" fill="rgba(249,115,22,0.18)" stroke="rgba(249,115,22,0.7)" stroke-width="1"/>
+  <text x="200.0" y="288.66" text-anchor="middle" fill="rgba(249,115,22,0.95)" font-family="IBM Plex Mono, monospace" font-size="8">3.5s</text>
+  <g filter="url(#glow-emerald-bench)">
+    <rect x="222" y="297.34" width="32" height="22.66" fill="rgba(16,185,129,0.25)" stroke="rgba(16,185,129,0.9)" stroke-width="1.2"/>
+  </g>
+  <text x="238.0" y="281.34" text-anchor="middle" fill="rgba(16,185,129,1)" font-family="IBM Plex Mono, monospace" font-size="9" font-weight="700">1.21×</text>
+  <text x="238.0" y="293.34" text-anchor="middle" fill="rgba(16,185,129,1)" font-family="IBM Plex Mono, monospace" font-size="8" font-weight="700">2.9s</text>
+  <text x="200" y="338" text-anchor="middle" fill="rgba(255,255,255,0.7)" font-family="IBM Plex Mono, monospace" font-size="9" font-weight="700">3-tool analytics</text>
+  <rect x="356" y="182.50" width="32" height="137.50" fill="rgba(255,255,255,0.18)" stroke="rgba(255,255,255,0.4)" stroke-width="1"/>
+  <text x="372.0" y="178.50" text-anchor="middle" fill="rgba(255,255,255,0.65)" font-family="IBM Plex Mono, monospace" font-size="8">17.6s</text>
+  <rect x="394" y="245.78" width="32" height="74.22" fill="rgba(249,115,22,0.18)" stroke="rgba(249,115,22,0.7)" stroke-width="1"/>
+  <text x="410.0" y="241.78" text-anchor="middle" fill="rgba(249,115,22,0.95)" font-family="IBM Plex Mono, monospace" font-size="8">9.5s</text>
+  <g filter="url(#glow-emerald-bench)">
+    <rect x="432" y="269.22" width="32" height="50.78" fill="rgba(16,185,129,0.25)" stroke="rgba(16,185,129,0.9)" stroke-width="1.2"/>
+  </g>
+  <text x="448.0" y="253.22" text-anchor="middle" fill="rgba(16,185,129,1)" font-family="IBM Plex Mono, monospace" font-size="9" font-weight="700">1.46×</text>
+  <text x="448.0" y="265.22" text-anchor="middle" fill="rgba(16,185,129,1)" font-family="IBM Plex Mono, monospace" font-size="8" font-weight="700">6.5s</text>
+  <text x="410" y="338" text-anchor="middle" fill="rgba(255,255,255,0.7)" font-family="IBM Plex Mono, monospace" font-size="9" font-weight="700">9-tool incident</text>
+  <rect x="566" y="82.50" width="32" height="237.50" fill="rgba(255,255,255,0.18)" stroke="rgba(255,255,255,0.4)" stroke-width="1"/>
+  <text x="582.0" y="78.50" text-anchor="middle" fill="rgba(255,255,255,0.65)" font-family="IBM Plex Mono, monospace" font-size="8">30.4s</text>
+  <rect x="604" y="230.16" width="32" height="89.84" fill="rgba(249,115,22,0.18)" stroke="rgba(249,115,22,0.7)" stroke-width="1"/>
+  <text x="620.0" y="226.16" text-anchor="middle" fill="rgba(249,115,22,0.95)" font-family="IBM Plex Mono, monospace" font-size="8">11.5s</text>
+  <g filter="url(#glow-emerald-bench)">
+    <rect x="642" y="251.25" width="32" height="68.75" fill="rgba(16,185,129,0.25)" stroke="rgba(16,185,129,0.9)" stroke-width="1.2"/>
+  </g>
+  <text x="658.0" y="235.25" text-anchor="middle" fill="rgba(16,185,129,1)" font-family="IBM Plex Mono, monospace" font-size="9" font-weight="700">1.31×</text>
+  <text x="658.0" y="247.25" text-anchor="middle" fill="rgba(16,185,129,1)" font-family="IBM Plex Mono, monospace" font-size="8" font-weight="700">8.8s</text>
+  <text x="620" y="338" text-anchor="middle" fill="rgba(255,255,255,0.7)" font-family="IBM Plex Mono, monospace" font-size="9" font-weight="700">15-tool ad-campaign</text>
+  <text x="380" y="362" text-anchor="middle" fill="rgba(255,255,255,0.55)" font-family="IBM Plex Mono, monospace" font-size="9">Speedup labels are vs parallel — the realistic baseline today.</text>
+</svg>
