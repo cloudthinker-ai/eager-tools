@@ -36,6 +36,7 @@
               />
             </filter>
           </defs>
+          <rect width="720" height="340" fill="#0f172a" rx="8"/>
 
           <!-- ─── Column 1: incoming stream chunks ──────────────────────────── -->
           <text

@@ -5,6 +5,7 @@
       <feDropShadow dx="0" dy="0" stdDeviation="3" flood-color="#10b981" flood-opacity="0.4"/>
     </filter>
   </defs>
+  <rect width="760" height="380" fill="#0f172a" rx="8"/>
   <!-- Legend -->
   <rect x="80" y="22" width="14" height="10" fill="rgba(255,255,255,0.18)" stroke="rgba(255,255,255,0.4)" stroke-width="1"/>
   <text x="100" y="31" fill="rgba(255,255,255,0.7)" font-family="IBM Plex Mono, monospace" font-size="9">sequential</text>

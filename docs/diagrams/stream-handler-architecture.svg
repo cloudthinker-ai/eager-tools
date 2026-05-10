@@ -36,6 +36,7 @@
               />
             </filter>
           </defs>
+          <rect width="820" height="320" fill="#0f172a" rx="8"/>
 
           <!-- ─── Stage 1: Provider stream ──────────────────────────────────── -->
           <rect
