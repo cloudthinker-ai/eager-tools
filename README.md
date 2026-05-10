@@ -14,7 +14,7 @@
 ## The problem in one graph
 
 <p align="center">
-  <img src="./docs/diagrams/eager-vs-classic-timeline.svg?v=2" alt="Timeline: parallel waits for stream to finish; eager fires each tool the moment its block seals — tools and stream overlap." width="760"/>
+  <img src="./docs/diagrams/eager-vs-classic-timeline.svg?v=3" alt="Timeline: parallel waits for stream to finish; eager fires each tool the moment its block seals — tools and stream overlap."/>
 </p>
 
 <details>
@@ -49,7 +49,7 @@ with the *stream itself* — something parallel dispatch can't do.
 Full table + repro details: [`bench/results.md`](./bench/results.md).
 
 <p align="center">
-  <img src="./docs/diagrams/benchmark-results-chart.svg?v=2" alt="Bar chart: sequential vs parallel vs eager across 3-tool, 9-tool, and 15-tool workloads. Eager wins by 1.21×–1.46× vs parallel." width="760"/>
+  <img src="./docs/diagrams/benchmark-results-chart.svg?v=3" alt="Bar chart: sequential vs parallel vs eager across 3-tool, 9-tool, and 15-tool workloads. Eager wins by 1.21×–1.46× vs parallel."/>
 </p>
 
 | Workload | Sequential | Parallel | **Eager** | Speedup vs parallel |
@@ -142,13 +142,13 @@ The **stream phase still happens first**. Tools still wait for `message_stop`. A
 See [`METHOD.md`](./METHOD.md) for the full mechanism: the seal event, the `tool_call_id` invariant, the runtime contract, and the edge cases.
 
 <p align="center">
-  <img src="./docs/diagrams/seal-mechanism-flow.svg?v=2" alt="Seal mechanism: a new tool_call_id in the stream triggers a SealEvent, which dispatches the completed tool to the ExecutorPool while the stream buffers the next block." width="720"/>
+  <img src="./docs/diagrams/seal-mechanism-flow.svg?v=3" alt="Seal mechanism: a new tool_call_id in the stream triggers a SealEvent, which dispatches the completed tool to the ExecutorPool while the stream buffers the next block."/>
 </p>
 
 ---
 
 <p align="center">
-  <img src="./docs/diagrams/stream-handler-architecture.svg?v=2" alt="Stream handler architecture: provider stream → adapter → SealDetector → ExecutorPool → user events and results." width="760"/>
+  <img src="./docs/diagrams/stream-handler-architecture.svg?v=3" alt="Stream handler architecture: provider stream → adapter → SealDetector → ExecutorPool → user events and results."/>
 </p>
 
 For the per-block mechanism (chunks → buffer → seal → dispatch), see
