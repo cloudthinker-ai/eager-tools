@@ -163,20 +163,6 @@ For the per-block mechanism (chunks → buffer → seal → dispatch), see
 
 Long version with edge cases: [`docs/when-not-to-use.md`](./docs/when-not-to-use.md).
 
-## Status
-
-| Version | State | What's in it |
-|---------|-------|--------------|
-| v0.0.1 | scaffold | Core API shape locked, stubs + golden-trace tests |
-| v0.1 | alpha — adapters + bench shipped | Core + Anthropic + OpenAI adapters, OpenRouter via the OpenAI adapter, 5 examples, synthetic bench |
-| v0.2 | alpha — LangGraph adapter shipped | `eager-tools-langgraph` — `EagerMiddleware` for `langchain.agents.create_agent`, provider-agnostic via LangChain's `tool_call_chunks` |
-| v0.3 | planned | Claude Agent SDK hook |
-
-Follow progress in [`TODO.md`](./TODO.md). Behavior changes between versions
-land in [`CHANGELOG.md`](./CHANGELOG.md) — read it before bumping
-`eager-tools-core`, especially if you've implemented a custom
-`ObservabilityHook`.
-
 ## Contributing
 
 Adapter PRs welcome — LlamaIndex, AutoGen, Vercel AI SDK, any provider that exposes a streaming response with per-block identifiers. Start from `packages/eager-tools-core/` as the contract reference. See [`NEXT.md`](./NEXT.md) §3 for the extraction pattern.
